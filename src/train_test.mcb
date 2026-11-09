@@ -1,47 +1,28 @@
 # TODO: Manual review needed. Please delete this line after review.
-# Throwaway test namespace. Not part of a release. Run in a flat creative world, results print to chat as PASS or FAIL.
-# /function train_test:run_all runs everything, each test also has its own start and check functions.
+import ../gametest/tests.js
+
+# Test namespace, never part of a release. Every scenario here is run by a gametest test instance, see gametest/tests.js for the list and
+# the ticks each step runs at, and gametest/run.js to run them headless, npm test. A scenario is plain functions that build a stage at the
+# origin marker and spawn carts, and checks that set #ok train_test to 0 when something is wrong. The generated poll functions in the
+# last region call them at the right ticks and power the accept or fail test block.
 
 function load minecraft:load {
 	scoreboard objectives add train_test dummy
+	# Ticks since a test started, on the marker at its command block
+	scoreboard objectives add gt.age dummy
 }
-
-#region Runner
-# /function train_test:run_all, as a player standing on flat creative ground with space around. Runs every scenario 600 ticks apart, about
-# 9 minutes, results print as PASS or FAIL lines. Scheduled functions run at the world spawn and not at the player, so a home marker is left
-# at the player and every step runs at it. Each scenario builds its own stage with lib/begin, which also moves the origin marker.
-# A single scenario can be run on its own with /function train_test:tN/start, wherever the player stands.
-<%%
-const seq = ["t0/start", "trace/run_all", "t1/start", "t2/start", "t3/start", "t4/start", "t5/start", "t6/start", "t7/start", "t8/start", "t9/start", "t10/start", "t11/start", "t12/start", "t13/start", "t14/start"];
-const gap = 600;
-const lines = ["\tkill @e[tag=tth]", "\texecute align xyz positioned ~0.5 ~ ~0.5 run summon minecraft:marker ~ ~ ~ {Tags:[\"tth\"]}", "\ttellraw @a {\"text\":\"train_test started, " + seq.length + " scenarios\",\"color\":\"gray\"}"];
-seq.forEach((path, i) => {
-	emit.mcb("function run/step_" + i + " {\n\texecute at @e[tag=tth,limit=1] run function train_test:" + path + "\n}");
-	lines.push("\tschedule function train_test:run/step_" + i + " " + (i * gap + 1) + "t");
-});
-lines.push("\tschedule function train_test:run/done " + (seq.length * gap) + "t");
-emit.mcb("function run_all {\n" + lines.join("\n") + "\n}");
-emit.mcb("function run/done {\n\tkill @e[tag=tth]\n\ttellraw @a {\"text\":\"train_test finished\",\"color\":\"gray\"}\n}");
-%%>
-
-# t0 as a scenario, the stage first
-function t0/start {
-	function train_test:lib/begin
-	function train_test:lib/flat
-	function train_test:self_check
-}
-#endregion
 
 #region Library
-# As the player. Origin marker at the block center under the player, everything else is placed relative to it. Clears old test entities
+# Runs at the command block of a test. Origin marker at the block center 6 blocks south of it, clear of the scaffold, everything else is placed
+# relative to it. Clears old test entities
 function lib/begin {
 	function train_test:lib/cleanup
 	kill @e[tag=tt.origin]
 	scoreboard players set #noavoid train.const 0
-	execute align xyz positioned ~0.5 ~ ~0.5 run summon minecraft:marker ~ ~ ~ {Tags:["tt","tt.origin"]}
+	execute align xyz positioned ~0.5 ~ ~6.5 run summon minecraft:marker ~ ~ ~ {Tags:["tt","tt.origin"]}
 }
 
-# As the player. Flat stage, floor y-1 and clear air y..y+4, x -1..46, z -4..4 from the origin
+# Flat stage, floor y-1 and clear air y..y+4, x -1..46, z -4..4 from the origin. The test structure is 48 by 6 by 11 and holds all of it but the floor
 function lib/flat {
 	execute at @e[tag=tt.origin,limit=1] run fill ~-1 ~-1 ~-4 ~46 ~-1 ~4 minecraft:stone
 	execute at @e[tag=tt.origin,limit=1] run fill ~-1 ~ ~-4 ~46 ~4 ~4 minecraft:air
@@ -53,10 +34,10 @@ function lib/cleanup {
 	execute at @e[tag=tt.origin,limit=1] run kill @e[type=minecraft:item,distance=..64]
 }
 
-# Macro, name from storage train_test:cur. Prints PASS when #ok train_test is 1
+# Macro, name from storage train_test:cur. Says PASS or FAIL, say is what reaches a headless server log, tellraw has no player to send to
 function lib/report {
-	$execute if score #ok train_test matches 1 run tellraw @a [{"text":"PASS ","color":"green"},{"text":"$(name)"}]
-	$execute unless score #ok train_test matches 1 run tellraw @a [{"text":"FAIL ","color":"red"},{"text":"$(name)"}]
+	$execute if score #ok train_test matches 1 run say gt PASS $(name)
+	$execute unless score #ok train_test matches 1 run say gt FAIL $(name)
 }
 #endregion
 
@@ -82,7 +63,6 @@ function t10/start {
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~25 ~ ~ {Tags:["tt","tt.b"],Fuel:3000s,PushX:-1.0d,PushZ:0.0d}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:pig ~15 ~ ~2 {Tags:["tt","tt.near"],NoAI:1b}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:pig ~15 ~ ~-3.9 {Tags:["tt","tt.far"],NoAI:1b}
-	schedule function train_test:t10/check 300t
 }
 function t10/check {
 	scoreboard players set #ok train_test 1
@@ -93,8 +73,6 @@ function t10/check {
 	execute unless entity @e[tag=tt.near] run scoreboard players set #ok train_test 0
 	execute unless entity @e[tag=tt.far,nbt={Health:10.0f}] run scoreboard players set #ok train_test 0
 	function train_test:lib/ref_check
-	data modify storage train_test:cur name set value "t10 head-on explodes both, drops two items, hurts near not far, no blocks"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 
@@ -105,14 +83,11 @@ function t11/start {
 	function train_test:lib/strip
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10 ~ ~ {Tags:["tt","tt.a"]}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~12 ~ ~ {Tags:["tt","tt.b"],Motion:[-0.05d,0d,0d]}
-	schedule function train_test:t11/check 60t
 }
 function t11/check {
 	scoreboard players set #ok train_test 1
 	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
 	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
-	data modify storage train_test:cur name set value "t11 slow contact does not explode"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 
@@ -130,8 +105,6 @@ function t12/start {
 	scoreboard players set #ok train_test 1
 	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
 	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
-	data modify storage train_test:cur name set value "t12 same train furnaces do not explode"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 
@@ -153,14 +126,11 @@ function t13/start {
 	function train_test:lib/flat
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10 ~ ~ {Tags:["tt","tt.a"]}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10.9 ~ ~ {Tags:["tt","tt.b"]}
-	schedule function train_test:t13/check 5t
 }
 function t13/check {
 	scoreboard players set #ok train_test 1
 	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
 	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
-	data modify storage train_test:cur name set value "t13 freshly spawned furnaces do not explode"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 
@@ -181,8 +151,6 @@ function t14/start {
 	execute unless entity @e[tag=tt.f] run scoreboard players set #ok train_test 0
 	execute store result score #n train_test at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:furnace_minecart"}},distance=..64]
 	execute unless score #n train_test matches 2 run scoreboard players set #ok train_test 0
-	data modify storage train_test:cur name set value "t14 different trains explode, a coupled cart nearby survives"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 #endregion
@@ -226,12 +194,9 @@ function t2/start {
 	function train_test:lib/strip
 	function train_test:lib/head
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~30 ~ ~ {Tags:["tt","tt.x"]}
-	schedule function train_test:t2/check 400t
 }
 function t2/check {
 	function train_test:lib/stopped_short
-	data modify storage train_test:cur name set value "t2 head stops short of a parked cart"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 
@@ -250,12 +215,9 @@ function t3/start {
 	execute as @e[tag=tt.y,limit=1] run function train:link/assign_id
 	scoreboard players operation #lead train.tmp = @e[tag=tt.y,limit=1] train.id
 	execute as @e[tag=tt.z,limit=1] run function train:link/apply
-	schedule function train_test:t3/check 400t
 }
 function t3/check {
 	function train_test:lib/stopped_short
-	data modify storage train_test:cur name set value "t3 head stops short of a parked coupled train"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 
@@ -266,8 +228,6 @@ function t4/start {
 	function train_test:lib/strip
 	function train_test:lib/head
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~30 ~ ~ {Tags:["tt","tt.x"]}
-	schedule function train_test:t4/pop 300t
-	schedule function train_test:t4/check 420t
 }
 function t4/pop {
 	kill @e[tag=tt.x]
@@ -275,8 +235,6 @@ function t4/pop {
 function t4/check {
 	scoreboard players set #ok train_test 1
 	execute unless entity @e[tag=tt.h,scores={train.halt=0,train.svx=100..}] run scoreboard players set #ok train_test 0
-	data modify storage train_test:cur name set value "t4 head resumes when the way clears"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 
@@ -290,7 +248,6 @@ function t5/start {
 	scoreboard players set @e[tag=tt.b,limit=1] train.id 107
 	scoreboard players set @e[tag=tt.a] train.dir 1
 	scoreboard players set @e[tag=tt.b] train.dir 1
-	schedule function train_test:t5/check 45t
 }
 function t5/check {
 	scoreboard players set #ok train_test 1
@@ -301,8 +258,6 @@ function t5/check {
 	scoreboard players operation #b train_test = @e[tag=tt.b,limit=1] train.chk
 	scoreboard players operation #b train_test %= #period train.const
 	execute if score #a train_test = #b train_test run scoreboard players set #ok train_test 0
-	data modify storage train_test:cur name set value "t5 heads trace on different ticks"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 
@@ -313,14 +268,11 @@ function t6/start {
 	function train_test:lib/strip
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~3 ~ ~ {Tags:["tt","tt.h"]}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~5 ~ ~ {Tags:["tt","tt.x"]}
-	schedule function train_test:t6/check 60t
 }
 function t6/check {
 	scoreboard players set #ok train_test 1
 	execute if entity @e[tag=tt.h,scores={train.halt=3}] run scoreboard players set #ok train_test 0
 	execute if score @e[tag=tt.h,limit=1] train.gap matches -2147483648..2147483647 run scoreboard players set #ok train_test 0
-	data modify storage train_test:cur name set value "t6 head without a heading does nothing"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 
@@ -336,8 +288,6 @@ function t7/start {
 	execute as @e[tag=tt.h,limit=1] run function train:avoid/head
 	scoreboard players set #ok train_test 1
 	execute unless entity @e[tag=tt.h,scores={train.halt=3,train.gap=0}] run scoreboard players set #ok train_test 0
-	data modify storage train_test:cur name set value "t7 foreign cart in the head's own block"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 
@@ -350,12 +300,9 @@ function t8/start {
 	execute at @e[tag=tt.origin,limit=1] run fill ~11 ~ ~1 ~11 ~ ~3 minecraft:rail[shape=north_south]
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~1 ~ ~ {Tags:["tt","tt.h"],Fuel:3000s,PushX:1.0d,PushZ:0.0d}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~11 ~ ~3 {Tags:["tt","tt.x"]}
-	schedule function train_test:t8/check 500t
 }
 function t8/check {
 	function train_test:lib/stopped_short
-	data modify storage train_test:cur name set value "t8 head stops short around a curve"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 
@@ -369,12 +316,9 @@ function t9/start {
 	execute at @e[tag=tt.origin,limit=1] run fill ~11 ~1 ~ ~22 ~1 ~ minecraft:rail[shape=east_west]
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~1 ~ ~ {Tags:["tt","tt.h"],Fuel:3000s,PushX:1.0d,PushZ:0.0d}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~22 ~1 ~ {Tags:["tt","tt.x"]}
-	schedule function train_test:t9/check 500t
 }
 function t9/check {
 	function train_test:lib/stopped_short
-	data modify storage train_test:cur name set value "t9 head stops short up a slope"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 #endregion
@@ -402,25 +346,34 @@ for (const [shape, h, exit, up] of PAIRS) {
 	const dy = up ? 1 : 0;
 	const nshape = exit === "e" || exit === "w" ? "east_west" : "north_south";
 	const lines = [];
+	// A rail takes its shape from its neighbors when it is placed, so a lone curve comes out straight. Curves get a rail on the entry edge as
+	// well, both neighbors are placed first, and the curve last
+	const curve = ["south_east", "south_west", "north_west", "north_east"].includes(shape);
+	const [ex, , ez] = STEP[{ n: "s", e: "w", s: "n", w: "e" }[h]];
+	const entry = `~${ex} ~ ~${ez}`;
 	if (up) lines.push(`\tsetblock ~${dx} ~ ~${dz} minecraft:stone`);
+	if (curve) lines.push(`\tsetblock ${entry} minecraft:rail[shape=${h === "e" || h === "w" ? "east_west" : "north_south"}]`);
+	if (curve) lines.push(`\tsetblock ~${dx} ~${dy} ~${dz} minecraft:rail[shape=${nshape}]`);
 	lines.push(`\tsetblock ~ ~ ~ minecraft:rail[shape=${shape}]`);
-	lines.push(`\tsetblock ~${dx} ~${dy} ~${dz} minecraft:rail[shape=${nshape}]`);
+	if (!curve) lines.push(`\tsetblock ~${dx} ~${dy} ~${dz} minecraft:rail[shape=${nshape}]`);
 	lines.push(`\tsummon minecraft:furnace_minecart ~ ~ ~ {Tags:["tt","tt.h"]}`);
 	lines.push(`\tsummon minecraft:minecart ~${dx} ~${dy} ~${dz} {Tags:["tt","tt.x"]}`);
 	lines.push(`\tscoreboard players set @e[tag=tt.h,limit=1] train.dir ${HEAD[h]}`);
 	lines.push(`\texecute as @e[tag=tt.h,limit=1] run function train:trace/run`);
 	lines.push(`\texecute unless score #gap train.tmp matches 1000 run scoreboard players set #ok train_test 0`);
+	lines.push(`\texecute unless score #gap train.tmp matches 1000 run say gt shape FAIL ${shape} heading ${h}`);
 	lines.push(`\texecute if entity @e[tag=train.mine] run scoreboard players set #ok train_test 0`);
 	lines.push(`\tkill @e[tag=tt.h]`);
 	lines.push(`\tkill @e[tag=tt.x]`);
 	lines.push(`\tkill @e[type=minecraft:item,distance=..4]`);
 	lines.push(`\tsetblock ~ ~ ~ minecraft:air`);
 	lines.push(`\tsetblock ~${dx} ~${dy} ~${dz} minecraft:air`);
+	if (curve) lines.push(`\tsetblock ${entry} minecraft:air`);
 	if (up) lines.push(`\tsetblock ~${dx} ~ ~${dz} minecraft:stone`);
 	emit.mcb(`function trace/shape_${shape}_${h} {\n${lines.join("\n")}\n}`);
 }
 const calls = PAIRS.map(([shape, h]) => `\texecute at @e[tag=tt.origin,limit=1] run function train_test:trace/shape_${shape}_${h}`);
-emit.mcb(`function trace/shapes {\n\tscoreboard players set #ok train_test 1\n${calls.join("\n")}\n\tdata modify storage train_test:cur name set value "t2 tracer all 20 shape and heading pairs"\n\tfunction train_test:lib/report with storage train_test:cur\n}`);
+emit.mcb(`function trace/shapes {\n\tscoreboard players set #ok train_test 1\n${calls.join("\n")}\n}`);
 %%>
 
 # Shared by the layout cases. As the player, runs the trace from the head and adds a failure when the answer is wrong or a tag leaked
@@ -519,20 +472,6 @@ function trace/own_train {
 	function train_test:trace/shoot
 }
 
-# Every layout case on a fresh stage, then the 20 shape pairs
-function trace/run_all {
-	scoreboard players set #ok train_test 1
-	function train_test:trace/each_curve
-	function train_test:trace/each_up
-	function train_test:trace/each_down
-	function train_test:trace/each_clear
-	function train_test:trace/each_modded
-	function train_test:trace/each_own_train
-	data modify storage train_test:cur name set value "t2 tracer layouts curve up down clear modded own train and no tag leak"
-	function train_test:lib/report with storage train_test:cur
-	function train_test:trace/shapes
-	function train_test:lib/cleanup
-}
 function trace/each_curve {
 	function train_test:lib/begin
 	function train_test:lib/flat
@@ -563,11 +502,16 @@ function trace/each_own_train {
 	function train_test:lib/flat
 	function train_test:trace/own_train
 }
+function trace/each_shapes {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:trace/shapes
+}
 #endregion
 
 #region Task 2 sampler
-# Furnace a moves, b and c stand. Timing note: scheduled functions run after train:tick in the same tick, so a check at Nt sees the
-# sampler's result for tick N.
+# Furnace a moves, b and c stand. Steps run from a command block, which ticks after train:tick, so a step at age N sees the sampler's
+# result for tick N.
 function t1/start {
 	function train_test:lib/begin
 	function train_test:lib/flat
@@ -575,10 +519,6 @@ function t1/start {
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~5 ~ ~ {Tags:["tt","tt.a"],Motion:[0.2d,0d,0d]}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~20 ~ ~ {Tags:["tt","tt.b"]}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~30 ~ ~ {Tags:["tt","tt.c"]}
-	schedule function train_test:t1/check 5t
-	schedule function train_test:t1/tp 8t
-	schedule function train_test:t1/check_tp 9t
-	schedule function train_test:t1/roots 12t
 }
 
 # A moving furnace has a velocity and a heading east, a parked one has neither
@@ -594,8 +534,6 @@ function t1/check {
 	execute store result score #v train_test run scoreboard players get @e[tag=tt.b,limit=1] train.svx
 	execute unless score #v train_test matches -10..10 run scoreboard players set #ok train_test 0
 	execute if score @e[tag=tt.b,limit=1] train.dir matches -100..100 run scoreboard players set #ok train_test 0
-	data modify storage train_test:cur name set value "t1 sampler velocity and heading"
-	function train_test:lib/report with storage train_test:cur
 }
 
 function t1/tp {
@@ -608,8 +546,6 @@ function t1/check_tp {
 	scoreboard players set #v train_test -9999
 	execute store result score #v train_test run scoreboard players get @e[tag=tt.c,limit=1] train.svx
 	execute unless score #v train_test matches 0 run scoreboard players set #ok train_test 0
-	data modify storage train_test:cur name set value "t1 sampler teleport reads as 0"
-	function train_test:lib/report with storage train_test:cur
 }
 
 # root_of on a follower is its head, on a lone cart a new id of its own
@@ -629,8 +565,6 @@ function t1/roots {
 	execute unless score #r1 train_test = #aid train_test run scoreboard players set #ok train_test 0
 	execute if score #r2 train_test = #aid train_test run scoreboard players set #ok train_test 0
 	execute unless score #r2 train_test matches 1.. run scoreboard players set #ok train_test 0
-	data modify storage train_test:cur name set value "t1 sampler root_of"
-	function train_test:lib/report with storage train_test:cur
 	function train_test:lib/cleanup
 }
 #endregion
@@ -661,7 +595,49 @@ function self_check {
 	execute unless score #n train_test matches 4 run scoreboard players set #ok train_test 0
 	function train_test:lib/cleanup
 
-	data modify storage train_test:cur name set value "t0 shared state"
-	function train_test:lib/report with storage train_test:cur
 }
+#endregion
+
+#region Gametest poll functions
+# t0 as a scenario, the stage first
+function t0/run {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:self_check
+}
+
+# One poll function per test, run every tick by the repeating command block of its structure, at the command block. A marker at the block
+# counts ticks. A step that leaves #ok at 0 powers the fail block, the last step passing powers the accept block. Redstone goes at ~5 ~1 ~
+# for fail and ~3 ~1 ~ for accept, above the test blocks of the scaffold, see gametest/generate.js. A test removes its own command block when
+# it ends. The runner clears a finished test's entities, and a command block left running would count from 0 again and replay the scenario
+# over whichever test is running now. Every step prints its result once
+<%%
+for (const t of gametest.tests) {
+	const last = Math.max(...t.steps.map(([age]) => age));
+	const lines = [
+		"\texecute unless entity @e[type=minecraft:marker,tag=gt.mark,distance=..0.6] run summon minecraft:marker ~ ~ ~ {Tags:[\"gt.mark\"]}",
+		"\tscoreboard players add @e[type=minecraft:marker,tag=gt.mark,distance=..0.6] gt.age 1",
+		"\tscoreboard players operation #age train_test = @e[type=minecraft:marker,tag=gt.mark,distance=..0.6,limit=1] gt.age",
+	];
+	t.steps.forEach(([age, fn], i) => {
+		lines.push(`\texecute if score #age train_test matches ${age} run function train_test:gt/${t.id}_${i}`);
+		const body = [
+			"\tscoreboard players set #ok train_test 1",
+			`\tfunction train_test:${fn}`,
+			`\tdata modify storage train_test:cur name set value "${t.id} step ${i + 1} of ${t.steps.length}"`,
+			"\texecute unless score #ok train_test matches 1 run function train_test:lib/report with storage train_test:cur",
+			"\texecute unless score #ok train_test matches 1 run setblock ~5 ~1 ~ minecraft:redstone_block",
+			"	execute unless score #ok train_test matches 1 run setblock ~ ~ ~ minecraft:air",
+		];
+		if (age === last) {
+			body.push(`\tdata modify storage train_test:cur name set value "${t.id}"`);
+			body.push("\texecute if score #ok train_test matches 1 run function train_test:lib/report with storage train_test:cur");
+			body.push("\texecute if score #ok train_test matches 1 run setblock ~3 ~1 ~ minecraft:redstone_block");
+			body.push("\texecute if score #ok train_test matches 1 run setblock ~ ~ ~ minecraft:air");
+		}
+		emit.mcb(`function gt/${t.id}_${i} {\n${body.join("\n")}\n}`);
+	});
+	emit.mcb(`function gt/${t.id} {\n${lines.join("\n")}\n}`);
+}
+%%>
 #endregion

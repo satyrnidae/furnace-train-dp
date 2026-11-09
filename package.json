@@ -5,7 +5,9 @@
   "description": "Furnace minecart trains as a vanilla data pack",
   "scripts": {
     "build": "mcb build",
-    "watch": "mcb watch"
+    "watch": "mcb watch",
+    "test": "node gametest/run.js",
+    "gametest:fetch": "node gametest/fetch-server.js"
   },
   "devDependencies": {
     "mc-build": "4.3.2"
