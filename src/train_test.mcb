@@ -34,6 +34,192 @@ function lib/report {
 }
 #endregion
 
+#region Task 3 tracer
+# Expected exits for every valid shape and heading pair, written out by hand from the rail edges and not derived from the tracer's own table.
+# Fields: shape, heading, exit heading, 1 when the exit is the high edge of a slope. Each case puts a foreign cart one block beyond, so the gap is 1000.
+<%%
+const HEAD = { n: 0, e: 1, s: 2, w: 3 };
+const STEP = { n: [0, 0, -1], e: [1, 0, 0], s: [0, 0, 1], w: [-1, 0, 0] };
+const PAIRS = [
+	["north_south", "n", "n", 0], ["north_south", "s", "s", 0],
+	["east_west", "e", "e", 0], ["east_west", "w", "w", 0],
+	["ascending_east", "e", "e", 1], ["ascending_east", "w", "w", 0],
+	["ascending_west", "w", "w", 1], ["ascending_west", "e", "e", 0],
+	["ascending_north", "n", "n", 1], ["ascending_north", "s", "s", 0],
+	["ascending_south", "s", "s", 1], ["ascending_south", "n", "n", 0],
+	["south_east", "n", "e", 0], ["south_east", "w", "s", 0],
+	["south_west", "n", "w", 0], ["south_west", "e", "s", 0],
+	["north_west", "s", "w", 0], ["north_west", "e", "n", 0],
+	["north_east", "s", "e", 0], ["north_east", "w", "n", 0],
+];
+for (const [shape, h, exit, up] of PAIRS) {
+	const [dx, , dz] = STEP[exit];
+	const dy = up ? 1 : 0;
+	const nshape = exit === "e" || exit === "w" ? "east_west" : "north_south";
+	const lines = [];
+	if (up) lines.push(`\tsetblock ~${dx} ~ ~${dz} minecraft:stone`);
+	lines.push(`\tsetblock ~ ~ ~ minecraft:rail[shape=${shape}]`);
+	lines.push(`\tsetblock ~${dx} ~${dy} ~${dz} minecraft:rail[shape=${nshape}]`);
+	lines.push(`\tsummon minecraft:furnace_minecart ~ ~ ~ {Tags:["tt","tt.h"]}`);
+	lines.push(`\tsummon minecraft:minecart ~${dx} ~${dy} ~${dz} {Tags:["tt","tt.x"]}`);
+	lines.push(`\tscoreboard players set @e[tag=tt.h,limit=1] train.dir ${HEAD[h]}`);
+	lines.push(`\texecute as @e[tag=tt.h,limit=1] run function train:trace/run`);
+	lines.push(`\texecute unless score #gap train.tmp matches 1000 run scoreboard players set #ok train_test 0`);
+	lines.push(`\texecute if entity @e[tag=train.mine] run scoreboard players set #ok train_test 0`);
+	lines.push(`\tkill @e[tag=tt.h]`);
+	lines.push(`\tkill @e[tag=tt.x]`);
+	lines.push(`\tkill @e[type=minecraft:item,distance=..4]`);
+	lines.push(`\tsetblock ~ ~ ~ minecraft:air`);
+	lines.push(`\tsetblock ~${dx} ~${dy} ~${dz} minecraft:air`);
+	if (up) lines.push(`\tsetblock ~${dx} ~ ~${dz} minecraft:stone`);
+	emit.mcb(`function trace/shape_${shape}_${h} {\n${lines.join("\n")}\n}`);
+}
+const calls = PAIRS.map(([shape, h]) => `\texecute at @e[tag=tt.origin,limit=1] run function train_test:trace/shape_${shape}_${h}`);
+emit.mcb(`function trace/shapes {\n\tscoreboard players set #ok train_test 1\n${calls.join("\n")}\n\tdata modify storage train_test:cur name set value "t2 tracer all 20 shape and heading pairs"\n\tfunction train_test:lib/report with storage train_test:cur\n}`);
+%%>
+
+# Shared by the layout cases. As the player, runs the trace from the head and adds a failure when the answer is wrong or a tag leaked
+# Needs #want train_test, the expected gap
+function trace/shoot {
+	scoreboard players set #gap train.tmp -1
+	execute as @e[tag=tt.h,limit=1] run function train:trace/run
+	execute unless score #gap train.tmp = #want train_test run scoreboard players set #ok train_test 0
+	execute if entity @e[tag=train.mine] run scoreboard players set #ok train_test 0
+}
+
+# Heading east on flat rails, a curve south, then straight south, the cart is 9 blocks along the path
+function trace/curve {
+	execute at @e[tag=tt.origin,limit=1] run {
+		fill ~ ~ ~ ~4 ~ ~ minecraft:rail[shape=east_west]
+		setblock ~5 ~ ~ minecraft:rail[shape=south_west]
+		fill ~5 ~ ~1 ~5 ~ ~4 minecraft:rail[shape=north_south]
+		summon minecraft:furnace_minecart ~ ~ ~ {Tags:["tt","tt.h"]}
+		summon minecraft:minecart ~5 ~ ~4 {Tags:["tt","tt.x"]}
+	}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
+	scoreboard players set #want train_test 9000
+	function train_test:trace/shoot
+}
+
+# Up a slope onto rails one higher, the cart is 7 blocks along
+function trace/up {
+	execute at @e[tag=tt.origin,limit=1] run {
+		fill ~ ~ ~ ~2 ~ ~ minecraft:rail[shape=east_west]
+		setblock ~3 ~ ~ minecraft:rail[shape=ascending_east]
+		fill ~4 ~ ~ ~7 ~ ~ minecraft:stone
+		fill ~4 ~1 ~ ~7 ~1 ~ minecraft:rail[shape=east_west]
+		summon minecraft:furnace_minecart ~ ~ ~ {Tags:["tt","tt.h"]}
+		summon minecraft:minecart ~7 ~1 ~ {Tags:["tt","tt.x"]}
+	}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
+	scoreboard players set #want train_test 7000
+	function train_test:trace/shoot
+}
+
+# Down two slopes, the second one a block lower, then flat, the cart is 6 blocks along
+function trace/down {
+	execute at @e[tag=tt.origin,limit=1] run {
+		fill ~ ~ ~ ~1 ~ ~ minecraft:rail[shape=east_west]
+		setblock ~2 ~ ~ minecraft:rail[shape=ascending_west]
+		fill ~3 ~-1 ~ ~6 ~-1 ~ minecraft:air
+		fill ~3 ~-2 ~ ~6 ~-2 ~ minecraft:stone
+		setblock ~3 ~-1 ~ minecraft:rail[shape=ascending_west]
+		fill ~4 ~-1 ~ ~6 ~-1 ~ minecraft:rail[shape=east_west]
+		summon minecraft:furnace_minecart ~ ~ ~ {Tags:["tt","tt.h"]}
+		summon minecraft:minecart ~6 ~-1 ~ {Tags:["tt","tt.x"]}
+	}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
+	scoreboard players set #want train_test 6000
+	function train_test:trace/shoot
+}
+
+# 17 rails and nothing on them is clear
+function trace/clear {
+	execute at @e[tag=tt.origin,limit=1] run {
+		fill ~ ~ ~ ~16 ~ ~ minecraft:rail[shape=east_west]
+		summon minecraft:furnace_minecart ~ ~ ~ {Tags:["tt","tt.h"]}
+	}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
+	scoreboard players set #want train_test 99000
+	function train_test:trace/shoot
+}
+
+# A block that is not a rail ends the trace clear, whatever lies beyond it
+function trace/modded {
+	execute at @e[tag=tt.origin,limit=1] run {
+		fill ~ ~ ~ ~2 ~ ~ minecraft:rail[shape=east_west]
+		setblock ~3 ~ ~ minecraft:stone
+		fill ~4 ~ ~ ~6 ~ ~ minecraft:rail[shape=east_west]
+		summon minecraft:furnace_minecart ~ ~ ~ {Tags:["tt","tt.h"]}
+		summon minecraft:minecart ~5 ~ ~ {Tags:["tt","tt.x"]}
+	}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
+	scoreboard players set #want train_test 99000
+	function train_test:trace/shoot
+}
+
+# A cart of the head's own train is not an obstacle, only the foreign one behind it counts
+function trace/own_train {
+	execute at @e[tag=tt.origin,limit=1] run {
+		fill ~ ~ ~ ~8 ~ ~ minecraft:rail[shape=east_west]
+		summon minecraft:furnace_minecart ~ ~ ~ {Tags:["tt","tt.h"]}
+		summon minecraft:minecart ~2 ~ ~ {Tags:["tt","tt.f"]}
+		summon minecraft:minecart ~6 ~ ~ {Tags:["tt","tt.x"]}
+	}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
+	execute as @e[tag=tt.h,limit=1] unless score @s train.id = @s train.id run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.h,limit=1] train.id
+	execute as @e[tag=tt.f,limit=1] run function train:link/apply
+	scoreboard players set #want train_test 6000
+	function train_test:trace/shoot
+}
+
+# Every layout case on a fresh stage, then the 20 shape pairs
+function trace/run_all {
+	scoreboard players set #ok train_test 1
+	function train_test:trace/each_curve
+	function train_test:trace/each_up
+	function train_test:trace/each_down
+	function train_test:trace/each_clear
+	function train_test:trace/each_modded
+	function train_test:trace/each_own_train
+	data modify storage train_test:cur name set value "t2 tracer layouts curve up down clear modded own train and no tag leak"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:trace/shapes
+	function train_test:lib/cleanup
+}
+function trace/each_curve {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:trace/curve
+}
+function trace/each_up {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:trace/up
+}
+function trace/each_down {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:trace/down
+}
+function trace/each_clear {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:trace/clear
+}
+function trace/each_modded {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:trace/modded
+}
+function trace/each_own_train {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:trace/own_train
+}
+#endregion
+
 #region Task 2 sampler
 # Furnace a moves, b and c stand. Timing note: scheduled functions run after train:tick in the same tick, so a check at Nt sees the
 # sampler's result for tick N.
