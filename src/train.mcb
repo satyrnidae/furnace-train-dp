@@ -24,6 +24,14 @@ function load minecraft:load {
 	scoreboard objectives add train.smz dummy
 	scoreboard objectives add train.spx dummy
 	scoreboard objectives add train.spz dummy
+	# Furnace carts, see sample.mcb and avoid.mcb. Position last tick, velocity, last heading 0 N 1 E 2 S 3 W, gap to the next cart along the rail, tick of the last trace
+	scoreboard objectives add train.ppx dummy
+	scoreboard objectives add train.ppz dummy
+	scoreboard objectives add train.svx dummy
+	scoreboard objectives add train.svz dummy
+	scoreboard objectives add train.dir dummy
+	scoreboard objectives add train.gap dummy
+	scoreboard objectives add train.chk dummy
 	# Per chunk, fake players named c<dimension>_<x>_<z>
 	scoreboard objectives add train.cgen dummy
 	scoreboard objectives add train.cpres dummy
@@ -37,6 +45,14 @@ function load minecraft:load {
 	scoreboard players set #1000 train.const 1000
 	scoreboard players set #2000 train.const 2000
 	scoreboard players set #16000 train.const 16000
+	# Collision avoidance. Period in ticks between traces, reach in blocks, stop gap and hard hit speed in thousandths, #10 is the cap divisor
+	scoreboard players set #period train.const 20
+	scoreboard players set #reach train.const 16
+	scoreboard players set #stop train.const 2500
+	scoreboard players set #hit train.const 100
+	scoreboard players set #10 train.const 10
+	# Debug, 1 turns braking off so a head-on can be tested
+	scoreboard players set #noavoid train.const 0
 	# Registry of chunks this pack forceloaded, survives reloads
 	execute unless data storage train:chunks active run data modify storage train:chunks active set value []
 	# After a restart carts load a few ticks after the forced chunks do, so skip sweeping for a while

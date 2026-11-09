@@ -1,0 +1,66 @@
+# TODO: Manual review needed. Please delete this line after review.
+# Throwaway test namespace. Not part of a release. Run in a flat creative world, results print to chat as PASS or FAIL.
+# /function train_test:run_all runs everything, each test also has its own start and check functions.
+
+function load minecraft:load {
+	scoreboard objectives add train_test dummy
+}
+
+#region Library
+# As the player. Origin marker at the block center under the player, everything else is placed relative to it. Clears old test entities
+function lib/begin {
+	function train_test:lib/cleanup
+	kill @e[tag=tt.origin]
+	scoreboard players set #noavoid train.const 0
+	execute align xyz positioned ~0.5 ~ ~0.5 run summon minecraft:marker ~ ~ ~ {Tags:["tt","tt.origin"]}
+}
+
+# As the player. Flat stage, floor y-1 and clear air y..y+4, x -1..46, z -4..4 from the origin
+function lib/flat {
+	execute at @e[tag=tt.origin,limit=1] run fill ~-1 ~-1 ~-4 ~46 ~-1 ~4 minecraft:stone
+	execute at @e[tag=tt.origin,limit=1] run fill ~-1 ~ ~-4 ~46 ~4 ~4 minecraft:air
+}
+
+# Removes everything the tests spawned, items too
+function lib/cleanup {
+	kill @e[tag=tt,tag=!tt.origin]
+	execute at @e[tag=tt.origin,limit=1] run kill @e[type=minecraft:item,distance=..64]
+}
+
+# Macro, name from storage train_test:cur. Prints PASS when #ok train_test is 1
+function lib/report {
+	$execute if score #ok train_test matches 1 run tellraw @a [{"text":"PASS ","color":"green"},{"text":"$(name)"}]
+	$execute unless score #ok train_test matches 1 run tellraw @a [{"text":"FAIL ","color":"red"},{"text":"$(name)"}]
+}
+#endregion
+
+#region Task 1 shared state
+# Objectives and constants exist, every minecart type is a train cart
+function self_check {
+	scoreboard players set #ok train_test 1
+	REPEAT(0, 6) as i {
+		<%%
+		const names = ["train.ppx", "train.ppz", "train.svx", "train.svz", "train.dir", "train.gap", "train.chk"];
+		emit.mcb(`execute store success score #x train_test run scoreboard players set #probe ${names[i]} 1`);
+		emit.mcb(`execute unless score #x train_test matches 1 run scoreboard players set #ok train_test 0`);
+		%%>
+	}
+	execute unless score #period train.const matches 20 run scoreboard players set #ok train_test 0
+	execute unless score #reach train.const matches 16 run scoreboard players set #ok train_test 0
+	execute unless score #stop train.const matches 2500 run scoreboard players set #ok train_test 0
+	execute unless score #hit train.const matches 100 run scoreboard players set #ok train_test 0
+	execute unless score #10 train.const matches 10 run scoreboard players set #ok train_test 0
+	execute unless score #noavoid train.const matches 0 run scoreboard players set #ok train_test 0
+
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:hopper_minecart ~ ~ ~ {Tags:["tt","tt.probe"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:tnt_minecart ~ ~ ~ {Tags:["tt","tt.probe"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:spawner_minecart ~ ~ ~ {Tags:["tt","tt.probe"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:command_block_minecart ~ ~ ~ {Tags:["tt","tt.probe"]}
+	execute store result score #n train_test if entity @e[type=#train:carts,tag=tt.probe]
+	execute unless score #n train_test matches 4 run scoreboard players set #ok train_test 0
+	function train_test:lib/cleanup
+
+	data modify storage train_test:cur name set value "t0 shared state"
+	function train_test:lib/report with storage train_test:cur
+}
+#endregion
