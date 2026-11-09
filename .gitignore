@@ -7,3 +7,4 @@ node_modules
 data/train/function
 data/minecraft/tags/function
 .superpowers
+data/train_test/function
