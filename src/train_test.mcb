@@ -6,6 +6,32 @@ function load minecraft:load {
 	scoreboard objectives add train_test dummy
 }
 
+#region Runner
+# /function train_test:run_all, as a player standing on flat creative ground with space around. Runs every scenario 600 ticks apart, about
+# 9 minutes, results print as PASS or FAIL lines. Scheduled functions run at the world spawn and not at the player, so a home marker is left
+# at the player and every step runs at it. Each scenario builds its own stage with lib/begin, which also moves the origin marker.
+# A single scenario can be run on its own with /function train_test:tN/start, wherever the player stands.
+<%%
+const seq = ["t0/start", "trace/run_all", "t1/start", "t2/start", "t3/start", "t4/start", "t5/start", "t6/start", "t7/start", "t8/start", "t9/start", "t10/start", "t11/start", "t12/start", "t13/start", "t14/start"];
+const gap = 600;
+const lines = ["\tkill @e[tag=tth]", "\texecute align xyz positioned ~0.5 ~ ~0.5 run summon minecraft:marker ~ ~ ~ {Tags:[\"tth\"]}", "\ttellraw @a {\"text\":\"train_test started, " + seq.length + " scenarios\",\"color\":\"gray\"}"];
+seq.forEach((path, i) => {
+	emit.mcb("function run/step_" + i + " {\n\texecute at @e[tag=tth,limit=1] run function train_test:" + path + "\n}");
+	lines.push("\tschedule function train_test:run/step_" + i + " " + (i * gap + 1) + "t");
+});
+lines.push("\tschedule function train_test:run/done " + (seq.length * gap) + "t");
+emit.mcb("function run_all {\n" + lines.join("\n") + "\n}");
+emit.mcb("function run/done {\n\tkill @e[tag=tth]\n\ttellraw @a {\"text\":\"train_test finished\",\"color\":\"gray\"}\n}");
+%%>
+
+# t0 as a scenario, the stage first
+function t0/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:self_check
+}
+#endregion
+
 #region Library
 # As the player. Origin marker at the block center under the player, everything else is placed relative to it. Clears old test entities
 function lib/begin {
