@@ -1,3 +1,5 @@
+import ../../scale.js
+
 # Furnace crashes. Every tick each furnace cart looks for another furnace cart within 1.15 blocks. If the two are in different trains and
 # closing on each other at 0.1 blocks per tick or more, both explode: effects, a small damage to what stands near, and both carts are
 # destroyed so they drop as items. Nothing here touches a block, no real explosion is created.
@@ -60,7 +62,7 @@ function pair {
 	scoreboard players operation #off train.tmp = #dpz train.tmp
 	execute unless score #avx train.tmp >= #avz train.tmp run scoreboard players operation #off train.tmp = #dpx train.tmp
 	execute if score #off train.tmp matches ..-1 run scoreboard players operation #off train.tmp *= #-1 train.const
-	execute if score #off train.tmp matches 601.. run return 0
+	execute if score #off train.tmp matches <%u(0.6) + 1%>.. run return 0
 
 	tag @s add train.boom
 	execute as @e[tag=train.me,limit=1] at @s run function train:crash/boom

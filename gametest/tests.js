@@ -41,6 +41,8 @@ const gametest = {
 		{ id: "trace_crest", steps: [[1, "trace/crest"]] },
 		{ id: "t17_parallel_tracks", steps: [[1, "t17/run"]] },
 		{ id: "t18_reverse_yield", steps: [[1, "t18/start"], [121, "t18/reverse"], [136, "t18/check"]] },
+		{ id: "t19_far_coordinates", steps: [[1, "far/prep"], [80, "far/start"], [280, "far/check"]] },
+		{ id: "t20_follow_spacing", steps: [[1, "t20/start"], [101, "t20/check"]] },
 	],
 };
 

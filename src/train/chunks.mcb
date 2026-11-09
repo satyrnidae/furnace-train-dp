@@ -1,4 +1,5 @@
-# TODO: Manual review needed. Please delete this line after review.
+import ../../scale.js
+
 # Chunk loading. Every cart in a coupled train forceloads the chunks its 15x15 block square touches, so the squares overlap down the
 # train and give the head lead and the tail follow time. Claims are stamped with the tick, a sweep drops whatever wasn't touched.
 # That frees chunks that fall out of range, the whole train when any cart is off the rails, and anything left by a cut link or a dead cart.
@@ -46,10 +47,10 @@ function apply_visit {
 	function train:chunks/apply_walk
 }
 
-# As a cart, at it. Refreshes every chunk its square touches. Positions are thousandths of a block and floor division by 16000 gives the chunk
+# As a cart, at it. Refreshes every chunk its square touches. Positions are in units, see scale.js, and floor division by a chunk, 1024 of them, gives the chunk
 function touch_cart {
-	execute store result score #xm train.tmp run data get entity @s Pos[0] 1000
-	execute store result score #zm train.tmp run data get entity @s Pos[2] 1000
+	execute store result score #xm train.tmp run data get entity @s Pos[0] <%UNIT%>
+	execute store result score #zm train.tmp run data get entity @s Pos[2] <%UNIT%>
 	scoreboard players set #d train.tmp -1
 	execute if dimension minecraft:overworld run scoreboard players set #d train.tmp 0
 	execute if dimension minecraft:the_nether run scoreboard players set #d train.tmp 1
@@ -62,17 +63,17 @@ function touch_cart {
 
 	# The square is the position plus or minus 7.5 blocks, so it spans one or two chunks per axis
 	scoreboard players operation #cx0 train.tmp = #xm train.tmp
-	scoreboard players remove #cx0 train.tmp 7500
-	scoreboard players operation #cx0 train.tmp /= #16000 train.const
+	scoreboard players remove #cx0 train.tmp <%u(7.5)%>
+	scoreboard players operation #cx0 train.tmp /= #chunk train.const
 	scoreboard players operation #cx1 train.tmp = #xm train.tmp
-	scoreboard players add #cx1 train.tmp 7500
-	scoreboard players operation #cx1 train.tmp /= #16000 train.const
+	scoreboard players add #cx1 train.tmp <%u(7.5)%>
+	scoreboard players operation #cx1 train.tmp /= #chunk train.const
 	scoreboard players operation #cz0 train.tmp = #zm train.tmp
-	scoreboard players remove #cz0 train.tmp 7500
-	scoreboard players operation #cz0 train.tmp /= #16000 train.const
+	scoreboard players remove #cz0 train.tmp <%u(7.5)%>
+	scoreboard players operation #cz0 train.tmp /= #chunk train.const
 	scoreboard players operation #cz1 train.tmp = #zm train.tmp
-	scoreboard players add #cz1 train.tmp 7500
-	scoreboard players operation #cz1 train.tmp /= #16000 train.const
+	scoreboard players add #cz1 train.tmp <%u(7.5)%>
+	scoreboard players operation #cz1 train.tmp /= #chunk train.const
 
 	scoreboard players operation #tx train.tmp = #cx0 train.tmp
 	scoreboard players operation #tz train.tmp = #cz0 train.tmp

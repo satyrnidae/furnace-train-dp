@@ -1,3 +1,5 @@
+import ../../scale.js
+
 # Rail path tracer. From a head's block it follows the rails ahead the way a cart would, one block at a time, and reports the distance
 # along the path to the first cart that isn't part of the head's own train. Curves, slopes and powered rails are followed exactly.
 # Rails are deterministic: a cart takes the shape of the block it is on, so there is never a choice to model.
@@ -5,11 +7,11 @@
 # A shape that doesn't have the entry edge can't be entered that way and the trace ends clear, same for a missing rail or modded shape.
 # Next block after leaving: through the high edge of a slope it is one up, anywhere else it is level or one down.
 
-# As a cart, at it. Needs @s train.dir. Leaves #gap train.tmp, thousandths of a block along the rail path to the first foreign cart,
-# 99000 when clear. Tags the cart's own train train.mine for the length of the trace and always untags
+# As a cart, at it. Needs @s train.dir. Leaves #gap train.tmp, units along the rail path to the first foreign cart,
+# 99 blocks when clear. Tags the cart's own train train.mine for the length of the trace and always untags
 function run {
 	function train:trace/mark
-	scoreboard players set #gap train.tmp 99000
+	scoreboard players set #gap train.tmp <%u(99)%>
 	scoreboard players set #n train.tmp 0
 	scoreboard players operation #h train.tmp = @s train.dir
 	# A cart at the very top of a slope has feet a hair over the block, so its block is air and the rail is the one below
@@ -75,7 +77,7 @@ for (const [d, [dx, dz]] of Object.entries(MOVE)) {
 # A foreign cart is in this block
 function hit {
 	scoreboard players operation #gap train.tmp = #n train.tmp
-	scoreboard players operation #gap train.tmp *= #1000 train.const
+	scoreboard players operation #gap train.tmp *= #unit train.const
 }
 
 # As a cart. Tags its own train, the cart and everything following it

@@ -1,4 +1,6 @@
-# Furnace cart sampler. Every tick each furnace cart stores its position and the change since last tick as its velocity, in thousandths
+import ../../scale.js
+
+# Furnace cart sampler. Every tick each furnace cart stores its position and the change since last tick as its velocity, in units
 # of a block per tick. A head also keeps its last heading. Crash detection reads these for every furnace cart, braking reads them for heads.
 # A cart that has just spawned has no previous position, it is initialized to the current one so its first velocity is 0.
 # A move of more than 0.45 blocks in a tick is a teleport, nothing real goes that fast, and reads as 0.
@@ -10,8 +12,8 @@ function tick {
 
 # As a furnace cart
 function cart {
-	execute store result score #px train.tmp run data get entity @s Pos[0] 1000
-	execute store result score #pz train.tmp run data get entity @s Pos[2] 1000
+	execute store result score #px train.tmp run data get entity @s Pos[0] <%UNIT%>
+	execute store result score #pz train.tmp run data get entity @s Pos[2] <%UNIT%>
 	execute unless score @s train.ppx = @s train.ppx run scoreboard players operation @s train.ppx = #px train.tmp
 	execute unless score @s train.ppz = @s train.ppz run scoreboard players operation @s train.ppz = #pz train.tmp
 	scoreboard players operation #vx train.tmp = #px train.tmp
@@ -21,10 +23,10 @@ function cart {
 	scoreboard players operation @s train.ppx = #px train.tmp
 	scoreboard players operation @s train.ppz = #pz train.tmp
 	scoreboard players set #tp train.tmp 0
-	execute if score #vx train.tmp matches 451.. run scoreboard players set #tp train.tmp 1
-	execute if score #vx train.tmp matches ..-451 run scoreboard players set #tp train.tmp 1
-	execute if score #vz train.tmp matches 451.. run scoreboard players set #tp train.tmp 1
-	execute if score #vz train.tmp matches ..-451 run scoreboard players set #tp train.tmp 1
+	execute if score #vx train.tmp matches <%u(0.45) + 1%>.. run scoreboard players set #tp train.tmp 1
+	execute if score #vx train.tmp matches ..-<%u(0.45) + 1%> run scoreboard players set #tp train.tmp 1
+	execute if score #vz train.tmp matches <%u(0.45) + 1%>.. run scoreboard players set #tp train.tmp 1
+	execute if score #vz train.tmp matches ..-<%u(0.45) + 1%> run scoreboard players set #tp train.tmp 1
 	execute if score #tp train.tmp matches 1 run scoreboard players set #vx train.tmp 0
 	execute if score #tp train.tmp matches 1 run scoreboard players set #vz train.tmp 0
 	scoreboard players operation @s train.svx = #vx train.tmp
@@ -38,7 +40,7 @@ function cart {
 	execute if score #az train.tmp matches ..-1 run scoreboard players operation #az train.tmp *= #-1 train.const
 	scoreboard players operation #as train.tmp = #ax train.tmp
 	scoreboard players operation #as train.tmp += #az train.tmp
-	execute if score #as train.tmp matches ..19 run return 0
+	execute if score #as train.tmp matches ..<%u(0.06) - 1%> run return 0
 	# Only a clearly dominant axis is a heading, the difference of the axes more than a quarter of their sum. On a curve block the move is
 	# diagonal and the two axes differ by rounding noise, and a plain tie break flipped the heading to the exit axis of the curve mid-corner
 	scoreboard players operation #diff train.tmp = #ax train.tmp

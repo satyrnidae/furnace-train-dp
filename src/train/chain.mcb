@@ -1,4 +1,5 @@
-# TODO: Manual review needed. Please delete this line after review.
+import ../../scale.js
+
 # The chain between two carts. A block display of the chain item's block, same id as the follower so a pair stays matched.
 # The string block state can't carry an axis, so the chain stays axis y. Its y scale is the length and a 90 degree x rotation lays it
 # onto the display's forward direction, which is aimed at the leader every tick.
@@ -34,21 +35,21 @@ function spawn {
 	tag @e[tag=train.new] remove train.new
 }
 
-# As a chain display. #cx #cy #cz is the midpoint and #len the gap, in thousandths of a block
+# As a chain display. #cx #cy #cz is the midpoint and #len the gap, in units, see scale.js
 function apply {
-	execute store result entity @s Pos[0] double 0.001 run scoreboard players get #cx train.tmp
-	execute store result entity @s Pos[1] double 0.001 run scoreboard players get #cy train.tmp
-	execute store result entity @s Pos[2] double 0.001 run scoreboard players get #cz train.tmp
+	execute store result entity @s Pos[0] double <%1 / UNIT%> run scoreboard players get #cx train.tmp
+	execute store result entity @s Pos[1] double <%1 / UNIT%> run scoreboard players get #cy train.tmp
+	execute store result entity @s Pos[2] double <%1 / UNIT%> run scoreboard players get #cz train.tmp
 	# Yaw and pitch toward the leader, so local z runs along the link. Aimed from 0.4 lower, otherwise the raise over the cart base tilts it toward the leader's feet
 	execute at @s positioned ~ ~-0.4 ~ facing entity @e[tag=train.lead_now,limit=1] feet run tp @s ~ ~0.4 ~ ~ ~
 	# Length is the gap minus 0.7, so each end tucks about 0.2 blocks into the cart walls and reads as attached
 	scoreboard players operation #clen train.tmp = #len train.tmp
-	scoreboard players remove #clen train.tmp 700
-	execute if score #clen train.tmp matches ..199 run scoreboard players set #clen train.tmp 200
+	scoreboard players remove #clen train.tmp <%u(0.7)%>
+	execute if score #clen train.tmp matches ..<%u(0.2) - 1%> run scoreboard players set #clen train.tmp <%u(0.2)%>
 	# Rotated box is x 0..1, y -1..0, z 0..len from the corner, so the translation is -0.5, 0.5, -len/2 to center it on the entity
 	data modify storage train:tmp tf set value {translation:[-0.5f,0.5f,-0.75f],left_rotation:[0.70711f,0f,0f,0.70711f],scale:[1f,1.5f,1f],right_rotation:[0f,0f,0f,1f]}
-	execute store result storage train:tmp tf.scale[1] float 0.001 run scoreboard players get #clen train.tmp
-	execute store result storage train:tmp tf.translation[2] float -0.0005 run scoreboard players get #clen train.tmp
+	execute store result storage train:tmp tf.scale[1] float <%1 / UNIT%> run scoreboard players get #clen train.tmp
+	execute store result storage train:tmp tf.translation[2] float -<%1 / (2 * UNIT)%> run scoreboard players get #clen train.tmp
 	data modify entity @s transformation set from storage train:tmp tf
 	data modify entity @s start_interpolation set value 0
 }

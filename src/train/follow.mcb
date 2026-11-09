@@ -1,4 +1,5 @@
-# TODO: Manual review needed. Please delete this line after review.
+import ../../scale.js
+
 # Follower control. Each follower copies the speed of the cart ahead along the line to it, plus a correction toward 2 blocks of
 # spacing, and gets that written as its Motion every tick. Rail physics keeps the speed and puts the direction on the track.
 # The leader's speed is its real displacement since last tick. The Motion tag of a jammed cart holds whatever piled up, 3+ blocks
@@ -12,9 +13,9 @@ function tick {
 	scoreboard players operation #prev train.tmp = @s train.prev
 	scoreboard players operation #self train.tmp = @s train.id
 	scoreboard players set #found train.tmp 0
-	execute store result score #fx train.tmp run data get entity @s Pos[0] 1000
-	execute store result score #fy train.tmp run data get entity @s Pos[1] 1000
-	execute store result score #fz train.tmp run data get entity @s Pos[2] 1000
+	execute store result score #fx train.tmp run data get entity @s Pos[0] <%UNIT%>
+	execute store result score #fy train.tmp run data get entity @s Pos[1] <%UNIT%>
+	execute store result score #fz train.tmp run data get entity @s Pos[2] <%UNIT%>
 	execute as @e[type=#train:carts,distance=..8] if score @s train.id = #prev train.tmp run function train:follow/leader_sample
 	execute if score #found train.tmp matches 0 run return run function train:link/unlink
 
@@ -31,10 +32,10 @@ function tick {
 
 	# Gap length, newton from last tick's value. Never lets the estimate collapse to 0, newton can't recover from that
 	scoreboard players operation #len train.tmp = @s train.len
-	execute if score #len train.tmp matches ..99 run scoreboard players set #len train.tmp 1500
+	execute if score #len train.tmp matches ..<%u(0.1) - 1%> run scoreboard players set #len train.tmp <%u(1.5)%>
 	function train:follow/sqrt
 	function train:follow/sqrt
-	execute if score #len train.tmp matches ..99 run scoreboard players set #len train.tmp 100
+	execute if score #len train.tmp matches ..<%u(0.1) - 1%> run scoreboard players set #len train.tmp <%u(0.1)%>
 	scoreboard players operation @s train.len = #len train.tmp
 
 	# Chain display at the midpoint, raised 0.4
@@ -44,7 +45,7 @@ function tick {
 	scoreboard players operation #cy train.tmp = #fy train.tmp
 	scoreboard players operation #cy train.tmp += #ly train.tmp
 	scoreboard players operation #cy train.tmp /= #2 train.const
-	scoreboard players add #cy train.tmp 400
+	scoreboard players add #cy train.tmp <%u(0.4)%>
 	scoreboard players operation #cz train.tmp = #fz train.tmp
 	scoreboard players operation #cz train.tmp += #lz train.tmp
 	scoreboard players operation #cz train.tmp /= #2 train.const
@@ -60,15 +61,15 @@ function tick {
 	scoreboard players operation #sp train.tmp += #t train.tmp
 	scoreboard players operation #sp train.tmp /= #len train.tmp
 	scoreboard players operation #err train.tmp = #len train.tmp
-	scoreboard players operation #err train.tmp -= #2000 train.const
+	scoreboard players operation #err train.tmp -= #spacing train.const
 	# Too close backs off 2.5x harder than too far catches up
 	scoreboard players set #gain train.tmp 20
 	execute if score #err train.tmp matches ..-1 run scoreboard players set #gain train.tmp 50
 	scoreboard players operation #err train.tmp *= #gain train.tmp
 	scoreboard players operation #err train.tmp /= #100 train.const
 	scoreboard players operation #sp train.tmp += #err train.tmp
-	execute if score #sp train.tmp matches 450.. run scoreboard players set #sp train.tmp 450
-	execute if score #sp train.tmp matches ..-300 run scoreboard players set #sp train.tmp -300
+	execute if score #sp train.tmp matches <%u(0.45)%>.. run scoreboard players set #sp train.tmp <%u(0.45)%>
+	execute if score #sp train.tmp matches ..-<%u(0.3)%> run scoreboard players set #sp train.tmp -<%u(0.3)%>
 
 	# Powered rails act on the cart after the write
 	execute if block ~ ~ ~ minecraft:powered_rail[powered=true] run function train:follow/boost_comp
@@ -83,8 +84,8 @@ function tick {
 	scoreboard players operation #mz train.tmp /= #len train.tmp
 
 	# Within 0.3 blocks the heading means nothing and writing it would cancel vanilla's push between carts, so motion is left alone
-	execute unless score #dsq train.tmp matches ..89999 store result entity @s Motion[0] double 0.001 run scoreboard players get #mx train.tmp
-	execute unless score #dsq train.tmp matches ..89999 store result entity @s Motion[2] double 0.001 run scoreboard players get #mz train.tmp
+	execute unless score #dsq train.tmp matches ..<%u(0.3) ** 2 - 1%> store result entity @s Motion[0] double <%1 / UNIT%> run scoreboard players get #mx train.tmp
+	execute unless score #dsq train.tmp matches ..<%u(0.3) ** 2 - 1%> store result entity @s Motion[2] double <%1 / UNIT%> run scoreboard players get #mz train.tmp
 
 	# Furnace followers burn fuel and push along their own PushX and PushZ, which fights the controller.
 	# Only written when something is set, NBT writes every tick aren't free
@@ -96,9 +97,9 @@ function tick {
 function leader_sample {
 	scoreboard players set #found train.tmp 1
 	tag @s add train.lead_now
-	execute store result score #lx train.tmp run data get entity @s Pos[0] 1000
-	execute store result score #ly train.tmp run data get entity @s Pos[1] 1000
-	execute store result score #lz train.tmp run data get entity @s Pos[2] 1000
+	execute store result score #lx train.tmp run data get entity @s Pos[0] <%UNIT%>
+	execute store result score #ly train.tmp run data get entity @s Pos[1] <%UNIT%>
+	execute store result score #lz train.tmp run data get entity @s Pos[2] <%UNIT%>
 	# Real velocity is the position change since the last sample
 	scoreboard players add @s train.lpx 0
 	scoreboard players add @s train.lpz 0
@@ -109,10 +110,10 @@ function leader_sample {
 	scoreboard players operation @s train.lpx = #lx train.tmp
 	scoreboard players operation @s train.lpz = #lz train.tmp
 	# The first sample after linking has no history and teleports spike. Nothing real passes 0.45
-	execute if score #vx train.tmp matches 450.. run scoreboard players set #vx train.tmp 450
-	execute if score #vx train.tmp matches ..-450 run scoreboard players set #vx train.tmp -450
-	execute if score #vz train.tmp matches 450.. run scoreboard players set #vz train.tmp 450
-	execute if score #vz train.tmp matches ..-450 run scoreboard players set #vz train.tmp -450
+	execute if score #vx train.tmp matches <%u(0.45)%>.. run scoreboard players set #vx train.tmp <%u(0.45)%>
+	execute if score #vx train.tmp matches ..-<%u(0.45)%> run scoreboard players set #vx train.tmp -<%u(0.45)%>
+	execute if score #vz train.tmp matches <%u(0.45)%>.. run scoreboard players set #vz train.tmp <%u(0.45)%>
+	execute if score #vz train.tmp matches ..-<%u(0.45)%> run scoreboard players set #vz train.tmp -<%u(0.45)%>
 }
 
 # One newton step, #len = (#len + #dsq / #len) / 2
@@ -127,9 +128,9 @@ function sqrt {
 # Never flips the sign, a request of 0.03 becomes 0
 function boost_comp {
 	scoreboard players operation #o train.tmp = #sp train.tmp
-	execute if score #o train.tmp matches 1.. run scoreboard players remove #sp train.tmp 60
+	execute if score #o train.tmp matches 1.. run scoreboard players remove #sp train.tmp <%u(0.06)%>
 	execute if score #o train.tmp matches 1.. if score #sp train.tmp matches ..-1 run scoreboard players set #sp train.tmp 0
-	execute if score #o train.tmp matches ..-1 run scoreboard players add #sp train.tmp 60
+	execute if score #o train.tmp matches ..-1 run scoreboard players add #sp train.tmp <%u(0.06)%>
 	execute if score #o train.tmp matches ..-1 if score #sp train.tmp matches 1.. run scoreboard players set #sp train.tmp 0
 }
 

@@ -1,10 +1,12 @@
+import ../scale.js
+
 # Furnace minecart trains. Couple carts with a chain, cut them with shears, and a train follows its head with a chain block between
 # each pair. A head furnace refuels from coal in a chest cart behind it, stops on unpowered powered rails and keeps the chunks around
 # the train forceloaded.
 #
 # Click handling: a function can't see the clicked entity, and a sneaking click on a minecart is a pass so no advancement fires. While
 # a player sneaks with a coupler or shears, carts in reach get an interaction entity parked on them, and its interaction data is the click.
-# Units: positions, gaps and speeds are scores in thousandths of a block, saved motion and push are ten thousandths.
+# Units: positions, gaps and speeds are scores in units of 1/64 block, see scale.js, saved motion and push are in ten thousandths.
 # Tags, the sneaking predicate and the take_one item modifier are plain JSON under data/train. The couplers tag has optional entries
 # that mcb tags can't express.
 
@@ -43,14 +45,14 @@ function load minecraft:load {
 	scoreboard players set #16 train.const 16
 	scoreboard players set #20 train.const 20
 	scoreboard players set #100 train.const 100
-	scoreboard players set #1000 train.const 1000
-	scoreboard players set #2000 train.const 2000
-	scoreboard players set #16000 train.const 16000
-	# Collision avoidance. Period in ticks between traces, reach in blocks, stop gap and hard hit speed in thousandths, #10 is the cap divisor
+	scoreboard players set #unit train.const <%UNIT%>
+	scoreboard players set #spacing train.const <%u(2)%>
+	scoreboard players set #chunk train.const <%16 * UNIT%>
+	# Collision avoidance. Period in ticks between traces, reach in blocks, stop gap and hard hit speed in units, #10 is the cap divisor
 	scoreboard players set #period train.const 20
 	scoreboard players set #reach train.const 16
-	scoreboard players set #stop train.const 2500
-	scoreboard players set #hit train.const 100
+	scoreboard players set #stop train.const <%u(2.5)%>
+	scoreboard players set #hit train.const <%u(0.1)%>
 	scoreboard players set #10 train.const 10
 	# Debug, 1 turns braking off so a head-on can be tested
 	scoreboard players set #noavoid train.const 0

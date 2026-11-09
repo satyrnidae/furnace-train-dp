@@ -1,7 +1,9 @@
+import ../../scale.js
+
 # Look-ahead braking. A head, meaning a furnace cart that isn't a follower, traces the rail ahead once every #period ticks, slot picked by
 # its id so heads spread across the period, and remembers the path distance to the first foreign cart as train.gap. Every tick between
 # traces the gap is aged by the distance the head travelled, and a speed cap comes from it:
-#   cap = (gap - #stop) / #10, thousandths of a block per tick, never below 0
+#   cap = (gap - #stop) / #10, units per tick, never below 0
 # At 0.2 blocks per tick a head starts slowing about 4.5 blocks out and stops about 2.5 blocks short. Followers are not touched, they hold
 # their spacing and stop with the head. An unpowered powered rail, halt 1 or 2, takes priority and this skips such a head.
 # train.halt 3 is yielding, see head.mcb. The speed cap has to be under 0.2, a head tops out there, before it counts as blocked.
@@ -33,9 +35,9 @@ function head {
 	scoreboard players operation #cap train.tmp -= #stop train.const
 	scoreboard players operation #cap train.tmp /= #10 train.const
 	execute if score #cap train.tmp matches ..-1 run scoreboard players set #cap train.tmp 0
-	execute if score @s train.halt matches 3 if score #cap train.tmp matches 200.. run return run function train:head/resume
+	execute if score @s train.halt matches 3 if score #cap train.tmp matches <%u(0.2)%>.. run return run function train:head/resume
 	execute if score @s train.halt matches 3 run return run function train:head/yield
-	execute if score #cap train.tmp matches ..199 run function train:avoid/enter
+	execute if score #cap train.tmp matches ..<%u(0.2) - 1%> run function train:avoid/enter
 }
 
 # As a head. Runs the trace and keeps the answer, with the tick it was taken

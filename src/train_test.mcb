@@ -1,3 +1,5 @@
+import ../scale.js
+
 import ../gametest/tests.js
 
 # Test namespace, never part of a release. Every scenario here is run by a gametest test instance, see gametest/tests.js for the list and
@@ -13,8 +15,8 @@ function load minecraft:load {
 
 #region Library
 # Origin marker of the arena, always at 100.5 64 100.5, everything else is placed relative to it. Clears old test entities.
-# The test runner puts each test structure millions of blocks from the origin at a random spot, and the pack scales positions by 1000 in 32 bit
-# scores, which saturates past about 2.1 million blocks, so nothing here is built at the command block. The structure only carries the start,
+# The test runner puts each test structure millions of blocks from the origin at a random spot, and a 32 bit score saturates at 33 million blocks at 64 units to a block,
+# which the old scale of 1000 did at 2.1 million, so nothing here is built at the command block. It would still be fine now, the arena just stays put. The structure only carries the start,
 # command, accept and fail blocks. The chunks of the arena are forceloaded by the gametest pack at load, see gametest/generate.js
 function lib/begin {
 	function train_test:lib/cleanup
@@ -128,12 +130,12 @@ function t11/check {
 	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
 	# They have to have touched. b starts 2.0 away and creeps 1.25 at the most, so within 1.6 means it got there. With braking on b stops
 	# short and this test used to pass without any contact
-	execute store result score #ax train_test run data get entity @e[tag=tt.a,limit=1] Pos[0] 1000
-	execute store result score #bx train_test run data get entity @e[tag=tt.b,limit=1] Pos[0] 1000
+	execute store result score #ax train_test run data get entity @e[tag=tt.a,limit=1] Pos[0] <%UNIT%>
+	execute store result score #bx train_test run data get entity @e[tag=tt.b,limit=1] Pos[0] <%UNIT%>
 	scoreboard players operation #dd train_test = #bx train_test
 	scoreboard players operation #dd train_test -= #ax train_test
 	execute if score #dd train_test matches ..-1 run scoreboard players operation #dd train_test *= #-1 train.const
-	execute unless score #dd train_test matches ..1600 run scoreboard players set #ok train_test 0
+	execute unless score #dd train_test matches ..<%u(1.6)%> run scoreboard players set #ok train_test 0
 }
 
 # t12 two furnaces of one train in a hard closing contact do not explode. Velocities are set by hand so only the train rule is under test
@@ -154,13 +156,13 @@ function t12/start {
 
 # Positions into the sampler scores and a closing speed of 0.6 between tt.a and tt.b, a moving right and b moving left
 function lib/hard_closing {
-	execute store result score @e[tag=tt.a,limit=1] train.ppx run data get entity @e[tag=tt.a,limit=1] Pos[0] 1000
-	execute store result score @e[tag=tt.a,limit=1] train.ppz run data get entity @e[tag=tt.a,limit=1] Pos[2] 1000
-	execute store result score @e[tag=tt.b,limit=1] train.ppx run data get entity @e[tag=tt.b,limit=1] Pos[0] 1000
-	execute store result score @e[tag=tt.b,limit=1] train.ppz run data get entity @e[tag=tt.b,limit=1] Pos[2] 1000
-	scoreboard players set @e[tag=tt.a,limit=1] train.svx 300
+	execute store result score @e[tag=tt.a,limit=1] train.ppx run data get entity @e[tag=tt.a,limit=1] Pos[0] <%UNIT%>
+	execute store result score @e[tag=tt.a,limit=1] train.ppz run data get entity @e[tag=tt.a,limit=1] Pos[2] <%UNIT%>
+	execute store result score @e[tag=tt.b,limit=1] train.ppx run data get entity @e[tag=tt.b,limit=1] Pos[0] <%UNIT%>
+	execute store result score @e[tag=tt.b,limit=1] train.ppz run data get entity @e[tag=tt.b,limit=1] Pos[2] <%UNIT%>
+	scoreboard players set @e[tag=tt.a,limit=1] train.svx <%u(0.3)%>
 	scoreboard players set @e[tag=tt.a,limit=1] train.svz 0
-	scoreboard players set @e[tag=tt.b,limit=1] train.svx -300
+	scoreboard players set @e[tag=tt.b,limit=1] train.svx -<%u(0.3)%>
 	scoreboard players set @e[tag=tt.b,limit=1] train.svz 0
 }
 
@@ -213,11 +215,11 @@ function lib/head {
 function lib/stopped_short {
 	scoreboard players set #ok train_test 1
 	execute unless entity @e[tag=tt.h] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.h,scores={train.halt=3,train.svx=-10..10,train.svz=-10..10}] run scoreboard players set #ok train_test 0
-	execute store result score #hx train_test run data get entity @e[tag=tt.h,limit=1] Pos[0] 1000
-	execute store result score #hz train_test run data get entity @e[tag=tt.h,limit=1] Pos[2] 1000
-	execute store result score #px train_test run data get entity @e[tag=tt.x,limit=1] Pos[0] 1000
-	execute store result score #pz train_test run data get entity @e[tag=tt.x,limit=1] Pos[2] 1000
+	execute unless entity @e[tag=tt.h,scores={train.halt=3,train.svx=-<%u(0.02)%>..<%u(0.02)%>,train.svz=-<%u(0.02)%>..<%u(0.02)%>}] run scoreboard players set #ok train_test 0
+	execute store result score #hx train_test run data get entity @e[tag=tt.h,limit=1] Pos[0] <%UNIT%>
+	execute store result score #hz train_test run data get entity @e[tag=tt.h,limit=1] Pos[2] <%UNIT%>
+	execute store result score #px train_test run data get entity @e[tag=tt.x,limit=1] Pos[0] <%UNIT%>
+	execute store result score #pz train_test run data get entity @e[tag=tt.x,limit=1] Pos[2] <%UNIT%>
 	scoreboard players operation #dx train_test = #px train_test
 	scoreboard players operation #dx train_test -= #hx train_test
 	execute if score #dx train_test matches ..-1 run scoreboard players operation #dx train_test *= #-1 train.const
@@ -225,7 +227,7 @@ function lib/stopped_short {
 	scoreboard players operation #dz train_test -= #hz train_test
 	execute if score #dz train_test matches ..-1 run scoreboard players operation #dz train_test *= #-1 train.const
 	scoreboard players operation #dx train_test += #dz train_test
-	execute unless score #dx train_test matches 2000.. run scoreboard players set #ok train_test 0
+	execute unless score #dx train_test matches <%u(2)%>.. run scoreboard players set #ok train_test 0
 	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #ok train_test 0
 }
 
@@ -277,7 +279,7 @@ function t4/pop {
 }
 function t4/check {
 	scoreboard players set #ok train_test 1
-	execute unless entity @e[tag=tt.h,scores={train.halt=0,train.svx=100..}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.halt=0,train.svx=<%u(0.1)%>..}] run scoreboard players set #ok train_test 0
 }
 
 # t5 two heads with ids 7 apart trace on different ticks
@@ -362,7 +364,7 @@ function t9/check {
 
 #region Task 3 tracer
 # Expected exits for every valid shape and heading pair, written out by hand from the rail edges and not derived from the tracer's own table.
-# Fields: shape, heading, exit heading, 1 when the exit is the high edge of a slope. Each case puts a foreign cart one block beyond, so the gap is 1000.
+# Fields: shape, heading, exit heading, 1 when the exit is the high edge of a slope. Each case puts a foreign cart one block beyond, so the gap is one block.
 <%%
 const HEAD = { n: 0, e: 1, s: 2, w: 3 };
 const STEP = { n: [0, 0, -1], e: [1, 0, 0], s: [0, 0, 1], w: [-1, 0, 0] };
@@ -397,8 +399,8 @@ for (const [shape, h, exit, up] of PAIRS) {
 	lines.push(`\tsummon minecraft:minecart ~${dx} ~${dy} ~${dz} {Tags:["tt","tt.x"]}`);
 	lines.push(`\tscoreboard players set @e[tag=tt.h,limit=1] train.dir ${HEAD[h]}`);
 	lines.push(`\texecute as @e[tag=tt.h,limit=1] run function train:trace/run`);
-	lines.push(`\texecute unless score #gap train.tmp matches 1000 run scoreboard players set #ok train_test 0`);
-	lines.push(`\texecute unless score #gap train.tmp matches 1000 run say gt shape FAIL ${shape} heading ${h}`);
+	lines.push(`\texecute unless score #gap train.tmp matches ${UNIT} run scoreboard players set #ok train_test 0`);
+	lines.push(`\texecute unless score #gap train.tmp matches ${UNIT} run say gt shape FAIL ${shape} heading ${h}`);
 	lines.push(`\texecute if entity @e[tag=train.mine] run scoreboard players set #ok train_test 0`);
 	lines.push(`\tkill @e[tag=tt.h]`);
 	lines.push(`\tkill @e[tag=tt.x]`);
@@ -432,7 +434,7 @@ function trace/curve {
 		summon minecraft:minecart ~5 ~ ~4 {Tags:["tt","tt.x"]}
 	}
 	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
-	scoreboard players set #want train_test 9000
+	scoreboard players set #want train_test <%9 * UNIT%>
 	function train_test:trace/shoot
 }
 
@@ -447,7 +449,7 @@ function trace/up {
 		summon minecraft:minecart ~7 ~1 ~ {Tags:["tt","tt.x"]}
 	}
 	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
-	scoreboard players set #want train_test 7000
+	scoreboard players set #want train_test <%7 * UNIT%>
 	function train_test:trace/shoot
 }
 
@@ -464,7 +466,7 @@ function trace/down {
 		summon minecraft:minecart ~6 ~-1 ~ {Tags:["tt","tt.x"]}
 	}
 	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
-	scoreboard players set #want train_test 6000
+	scoreboard players set #want train_test <%6 * UNIT%>
 	function train_test:trace/shoot
 }
 
@@ -475,7 +477,7 @@ function trace/clear {
 		summon minecraft:furnace_minecart ~ ~ ~ {Tags:["tt","tt.h"]}
 	}
 	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
-	scoreboard players set #want train_test 99000
+	scoreboard players set #want train_test <%u(99)%>
 	function train_test:trace/shoot
 }
 
@@ -489,7 +491,7 @@ function trace/modded {
 		summon minecraft:minecart ~5 ~ ~ {Tags:["tt","tt.x"]}
 	}
 	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
-	scoreboard players set #want train_test 99000
+	scoreboard players set #want train_test <%u(99)%>
 	function train_test:trace/shoot
 }
 
@@ -505,7 +507,7 @@ function trace/own_train {
 	execute as @e[tag=tt.h,limit=1] unless score @s train.id = @s train.id run function train:link/assign_id
 	scoreboard players operation #lead train.tmp = @e[tag=tt.h,limit=1] train.id
 	execute as @e[tag=tt.f,limit=1] run function train:link/apply
-	scoreboard players set #want train_test 6000
+	scoreboard players set #want train_test <%6 * UNIT%>
 	function train_test:trace/shoot
 }
 
@@ -561,8 +563,62 @@ function trace/midcurve {
 		summon minecraft:minecart ~ ~ ~3 {Tags:["tt","tt.x"]}
 	}
 	scoreboard players set @e[tag=tt.h,limit=1] train.dir 2
-	scoreboard players set #want train_test 3000
+	scoreboard players set #want train_test <%3 * UNIT%>
 	function train_test:trace/shoot
+}
+#endregion
+
+#region Followers on the move
+# A fueled head pulls two coupled followers along the strip. After 100 ticks it has gone a good way and each follower holds about 2 blocks
+# behind the cart ahead, the spacing of follow.mcb, within 0.35 either side
+function t20/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/head
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~1 ~ ~ {Tags:["tt","tt.f"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~-1 ~ ~ {Tags:["tt","tt.g"]}
+	execute as @e[tag=tt.h,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.h,limit=1] train.id
+	execute as @e[tag=tt.f,limit=1] run function train:link/apply
+	execute as @e[tag=tt.f,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.f,limit=1] train.id
+	execute as @e[tag=tt.g,limit=1] run function train:link/apply
+}
+function t20/check {
+	execute store result score #hx train_test run data get entity @e[tag=tt.h,limit=1] Pos[0] <%UNIT%>
+	execute store result score #fx train_test run data get entity @e[tag=tt.f,limit=1] Pos[0] <%UNIT%>
+	execute store result score #gx train_test run data get entity @e[tag=tt.g,limit=1] Pos[0] <%UNIT%>
+	scoreboard players operation #d1 train_test = #hx train_test
+	scoreboard players operation #d1 train_test -= #fx train_test
+	scoreboard players operation #d2 train_test = #fx train_test
+	scoreboard players operation #d2 train_test -= #gx train_test
+	execute unless score #d1 train_test matches <%u(1.65)%>..<%u(2.35)%> run scoreboard players set #ok train_test 0
+	execute unless score #d2 train_test matches <%u(1.65)%>..<%u(2.35)%> run scoreboard players set #ok train_test 0
+	# It went somewhere, the head started at x 3 of the origin and the strip is 45 long
+	execute at @e[tag=tt.origin,limit=1] unless entity @e[tag=tt.h,distance=8..] run scoreboard players set #ok train_test 0
+}
+#endregion
+
+#region Far from the origin
+# The same stop as t2 at x 25 million, past where the old scale of 1000 saturated, and inside the world border where 64 units to a block still fits. The arena is
+# forceloaded first and given time to load, then built with the origin moved out there. Everything else is relative to the origin marker
+function far/prep {
+	forceload add 24999990 90 25000060 130
+}
+function far/start {
+	function train_test:lib/cleanup
+	kill @e[tag=tt.origin]
+	scoreboard players set #noavoid train.const 0
+	execute unless loaded 25000000 64 100 run scoreboard players set #ok train_test 0
+	execute positioned 25000000.5 64 100.5 run summon minecraft:marker ~ ~ ~ {Tags:["tt","tt.origin"]}
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/head
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~30 ~ ~ {Tags:["tt","tt.x"]}
+}
+function far/check {
+	function train_test:lib/stopped_short
 }
 #endregion
 
@@ -595,7 +651,7 @@ function t18/reverse {
 	data merge entity @e[tag=tt.h,limit=1] {PushX:-1.0d,PushZ:0.0d,Fuel:3000s}
 }
 function t18/check {
-	execute unless entity @e[tag=tt.h,scores={train.halt=0,train.svx=..-100}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.halt=0,train.svx=..-<%u(0.1)%>}] run scoreboard players set #ok train_test 0
 }
 #endregion
 
@@ -614,7 +670,7 @@ function trace/crest {
 		summon minecraft:minecart ~1 ~1 ~ {Tags:["tt","tt.x"]}
 	}
 	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
-	scoreboard players set #want train_test 1000
+	scoreboard players set #want train_test <%1 * UNIT%>
 	function train_test:trace/shoot
 }
 #endregion
@@ -676,13 +732,13 @@ function t1/check {
 	scoreboard players set #ok train_test 1
 	scoreboard players set #v train_test -9999
 	execute store result score #v train_test run scoreboard players get @e[tag=tt.a,limit=1] train.svx
-	execute unless score #v train_test matches 100..250 run scoreboard players set #ok train_test 0
+	execute unless score #v train_test matches <%u(0.1)%>..<%u(0.25)%> run scoreboard players set #ok train_test 0
 	scoreboard players set #v train_test -9999
 	execute store result score #v train_test run scoreboard players get @e[tag=tt.a,limit=1] train.dir
 	execute unless score #v train_test matches 1 run scoreboard players set #ok train_test 0
 	scoreboard players set #v train_test -9999
 	execute store result score #v train_test run scoreboard players get @e[tag=tt.b,limit=1] train.svx
-	execute unless score #v train_test matches -10..10 run scoreboard players set #ok train_test 0
+	execute unless score #v train_test matches -<%u(0.02)%>..<%u(0.02)%> run scoreboard players set #ok train_test 0
 	execute if score @e[tag=tt.b,limit=1] train.dir matches -100..100 run scoreboard players set #ok train_test 0
 }
 
@@ -690,7 +746,7 @@ function t1/tp {
 	execute as @e[tag=tt.c] at @s run tp @s ~15 ~ ~
 }
 
-# A teleport is not a speed, the tick after it the velocity is 0, never the 450 clamp
+# A teleport is not a speed, the tick after it the velocity is 0, never the speed clamp
 function t1/check_tp {
 	scoreboard players set #ok train_test 1
 	scoreboard players set #v train_test -9999
@@ -731,8 +787,8 @@ function self_check {
 	}
 	execute unless score #period train.const matches 20 run scoreboard players set #ok train_test 0
 	execute unless score #reach train.const matches 16 run scoreboard players set #ok train_test 0
-	execute unless score #stop train.const matches 2500 run scoreboard players set #ok train_test 0
-	execute unless score #hit train.const matches 100 run scoreboard players set #ok train_test 0
+	execute unless score #stop train.const matches <%u(2.5)%> run scoreboard players set #ok train_test 0
+	execute unless score #hit train.const matches <%u(0.1)%> run scoreboard players set #ok train_test 0
 	execute unless score #10 train.const matches 10 run scoreboard players set #ok train_test 0
 	execute unless score #noavoid train.const matches 0 run scoreboard players set #ok train_test 0
 

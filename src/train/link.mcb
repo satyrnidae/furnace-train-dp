@@ -1,4 +1,5 @@
-# TODO: Manual review needed. Please delete this line after review.
+import ../../scale.js
+
 # Coupling. First click is the cart ahead, second is the cart behind, which then follows the first. The clicked cart is tagged
 # train.target by click/hit. Coupler is any chain item, shears cut. Main hand wins when both hands hold a tool.
 
@@ -44,7 +45,7 @@ function apply {
 	# Relinking drops the old chain
 	function train:chain/kill
 	scoreboard players operation @s train.prev = #lead train.tmp
-	scoreboard players set @s train.len 2000
+	scoreboard players set @s train.len <%u(2)%>
 	tag @s add train.follower
 	scoreboard players set #ok train.tmp 1
 }
