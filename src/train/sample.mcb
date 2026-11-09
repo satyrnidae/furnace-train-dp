@@ -1,4 +1,3 @@
-# TODO: Manual review needed. Please delete this line after review.
 # Furnace cart sampler. Every tick each furnace cart stores its position and the change since last tick as its velocity, in thousandths
 # of a block per tick. A head also keeps its last heading. Crash detection reads these for every furnace cart, braking reads them for heads.
 # A cart that has just spawned has no previous position, it is initialized to the current one so its first velocity is 0.
@@ -40,6 +39,14 @@ function cart {
 	scoreboard players operation #as train.tmp = #ax train.tmp
 	scoreboard players operation #as train.tmp += #az train.tmp
 	execute if score #as train.tmp matches ..19 run return 0
+	# Only a clearly dominant axis is a heading, the difference of the axes more than a quarter of their sum. On a curve block the move is
+	# diagonal and the two axes differ by rounding noise, and a plain tie break flipped the heading to the exit axis of the curve mid-corner
+	scoreboard players operation #diff train.tmp = #ax train.tmp
+	scoreboard players operation #diff train.tmp -= #az train.tmp
+	execute if score #diff train.tmp matches ..-1 run scoreboard players operation #diff train.tmp *= #-1 train.const
+	scoreboard players operation #diff train.tmp *= #2 train.const
+	scoreboard players operation #diff train.tmp *= #2 train.const
+	execute unless score #diff train.tmp > #as train.tmp run return 0
 	execute if score #ax train.tmp >= #az train.tmp if score #vx train.tmp matches 1.. run scoreboard players set @s train.dir 1
 	execute if score #ax train.tmp >= #az train.tmp if score #vx train.tmp matches ..-1 run scoreboard players set @s train.dir 3
 	execute unless score #ax train.tmp >= #az train.tmp if score #vz train.tmp matches 1.. run scoreboard players set @s train.dir 2

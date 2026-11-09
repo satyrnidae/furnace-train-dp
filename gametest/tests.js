@@ -1,4 +1,3 @@
-// TODO: Manual review needed. Please delete this line after review.
 // Test manifest. Read by gametest/generate.js for the structures, environments and instances, and imported by src/train_test.mcb for the
 // poll function of each test.
 // Every test is one test instance with its own environment, but the runner starts them all at once, and the scenarios share one arena, tags and
@@ -36,6 +35,12 @@ const gametest = {
 		{ id: "t12_same_train", steps: [[1, "t12/start"]] },
 		{ id: "t13_fresh_spawn", steps: [[1, "t13/start"], [6, "t13/check"]] },
 		{ id: "t14_boom_survivor", steps: [[1, "t14/start"]] },
+		{ id: "t15_heading_diagonal", steps: [[1, "t15/run"]] },
+		{ id: "t16_cold_start", steps: [[1, "t16/start"], [201, "t16/check"]] },
+		{ id: "trace_midcurve", steps: [[1, "trace/midcurve"]] },
+		{ id: "trace_crest", steps: [[1, "trace/crest"]] },
+		{ id: "t17_parallel_tracks", steps: [[1, "t17/run"]] },
+		{ id: "t18_reverse_yield", steps: [[1, "t18/start"], [121, "t18/reverse"], [136, "t18/check"]] },
 	],
 };
 

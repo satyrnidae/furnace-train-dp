@@ -1,4 +1,3 @@
-# TODO: Manual review needed. Please delete this line after review.
 import ../gametest/tests.js
 
 # Test namespace, never part of a release. Every scenario here is run by a gametest test instance, see gametest/tests.js for the list and
@@ -117,6 +116,7 @@ function t10/check {
 # t11 a touch below 0.1 blocks per tick just bumps
 function t11/start {
 	function train_test:lib/begin
+	scoreboard players set #noavoid train.const 1
 	function train_test:lib/flat
 	function train_test:lib/strip
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10 ~ ~ {Tags:["tt","tt.a"]}
@@ -126,6 +126,14 @@ function t11/check {
 	scoreboard players set #ok train_test 1
 	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
 	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+	# They have to have touched. b starts 2.0 away and creeps 1.25 at the most, so within 1.6 means it got there. With braking on b stops
+	# short and this test used to pass without any contact
+	execute store result score #ax train_test run data get entity @e[tag=tt.a,limit=1] Pos[0] 1000
+	execute store result score #bx train_test run data get entity @e[tag=tt.b,limit=1] Pos[0] 1000
+	scoreboard players operation #dd train_test = #bx train_test
+	scoreboard players operation #dd train_test -= #ax train_test
+	execute if score #dd train_test matches ..-1 run scoreboard players operation #dd train_test *= #-1 train.const
+	execute unless score #dd train_test matches ..1600 run scoreboard players set #ok train_test 0
 }
 
 # t12 two furnaces of one train in a hard closing contact do not explode. Velocities are set by hand so only the train rule is under test
@@ -535,6 +543,119 @@ function trace/each_shapes {
 	function train_test:lib/begin
 	function train_test:lib/flat
 	function train_test:trace/shapes
+}
+#endregion
+
+#region Trace from inside a curve
+# The head is inside a curve block, already heading toward the exit edge. A curve has no entry edge for that heading, the cart came in on the
+# other one, so the first block of a trace also has to accept a heading toward any of its edges. South out of a south_west curve, then 3 rails
+# of straight south with the cart on the last, 3 blocks along
+function trace/midcurve {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run {
+		setblock ~-1 ~ ~ minecraft:rail[shape=east_west]
+		fill ~ ~ ~1 ~ ~ ~3 minecraft:rail[shape=north_south]
+		setblock ~ ~ ~ minecraft:rail[shape=south_west]
+		summon minecraft:furnace_minecart ~ ~ ~ {Tags:["tt","tt.h"]}
+		summon minecraft:minecart ~ ~ ~3 {Tags:["tt","tt.x"]}
+	}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 2
+	scoreboard players set #want train_test 3000
+	function train_test:trace/shoot
+}
+#endregion
+
+#region Parallel tracks
+# Two furnaces on rails one block apart, closing hard, are inside 1.15 of each other and never touch, a cart is 0.98 wide. Velocities by hand.
+# Only the offset along the line of the closing speed has to be small for a hit, the sideways one has to be under 0.6
+function t17/run {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10 ~ ~ {Tags:["tt","tt.a"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10.3 ~ ~1 {Tags:["tt","tt.b"]}
+	function train_test:lib/hard_closing
+	function train:crash/tick
+	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+}
+#endregion
+
+#region Reverse out of a yield
+# A head holding short of a cart ahead, and the player fuels it from the other side, which sets a push against its heading. It has to turn
+# around and go, a heading that never updates because the head never moves would hold it there until the cart leaves
+function t18/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/head
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~10 ~ ~ {Tags:["tt","tt.x"]}
+}
+function t18/reverse {
+	data merge entity @e[tag=tt.h,limit=1] {PushX:-1.0d,PushZ:0.0d,Fuel:3000s}
+}
+function t18/check {
+	execute unless entity @e[tag=tt.h,scores={train.halt=0,train.svx=..-100}] run scoreboard players set #ok train_test 0
+}
+#endregion
+
+#region Trace from the crest of a slope
+# A cart at the top of a slope block has feet a hair above the block, so the block at its feet is air and the rail is the one below. The trace
+# used to read that as no rail and clear. The head hangs at the crest of an ascending_east, the cart is on the rails one level up, 1 block along
+function trace/crest {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run {
+		setblock ~-1 ~ ~ minecraft:rail[shape=east_west]
+		setblock ~1 ~ ~ minecraft:stone
+		setblock ~1 ~1 ~ minecraft:rail[shape=east_west]
+		setblock ~ ~ ~ minecraft:rail[shape=ascending_east]
+		summon minecraft:furnace_minecart ~ ~1.0625 ~ {Tags:["tt","tt.h"],NoGravity:1b}
+		summon minecraft:minecart ~1 ~1 ~ {Tags:["tt","tt.x"]}
+	}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
+	scoreboard players set #want train_test 1000
+	function train_test:trace/shoot
+}
+#endregion
+
+#region Cold start
+# A head that starts from rest has no heading until it moves, and used to take its first trace up to a full period later, about 4 blocks of
+# travel at 0.2. The cart is 5 blocks ahead, so it has to be seen before the head gets there
+function t16/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/head
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~8 ~ ~ {Tags:["tt","tt.x"]}
+}
+function t16/check {
+	function train_test:lib/stopped_short
+}
+#endregion
+
+#region Heading on a curve
+# On a curve block a cart moves diagonally and |vx| and |vz| differ by rounding noise, so a tie break would flip the heading between the entry axis
+# and the exit axis. Heading is only updated when one axis clearly dominates. The sampler is driven by hand, sample/cart a first time to
+# set the previous position, then a move, then sample/cart again, all in one tick
+function t15/run {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~3 ~ ~ {Tags:["tt","tt.h"]}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
+	execute as @e[tag=tt.h,limit=1] at @s run function train:sample/cart
+	# Diagonal, 0.2 east and 0.21 south, z is ahead by 5 percent, not a change of heading
+	execute as @e[tag=tt.h,limit=1] at @s run tp @s ~0.2 ~ ~0.21
+	execute as @e[tag=tt.h,limit=1] at @s run function train:sample/cart
+	execute unless entity @e[tag=tt.h,scores={train.dir=1}] run scoreboard players set #ok train_test 0
+	# Diagonal the other way, 0.2 east and 0.19 north, still east
+	execute as @e[tag=tt.h,limit=1] at @s run tp @s ~0.2 ~ ~-0.19
+	execute as @e[tag=tt.h,limit=1] at @s run function train:sample/cart
+	execute unless entity @e[tag=tt.h,scores={train.dir=1}] run scoreboard players set #ok train_test 0
+	# A clear move north does change it
+	execute as @e[tag=tt.h,limit=1] at @s run tp @s ~ ~ ~-0.2
+	execute as @e[tag=tt.h,limit=1] at @s run function train:sample/cart
+	execute unless entity @e[tag=tt.h,scores={train.dir=0}] run scoreboard players set #ok train_test 0
 }
 #endregion
 

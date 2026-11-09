@@ -1,4 +1,3 @@
-# TODO: Manual review needed. Please delete this line after review.
 # Rail path tracer. From a head's block it follows the rails ahead the way a cart would, one block at a time, and reports the distance
 # along the path to the first cart that isn't part of the head's own train. Curves, slopes and powered rails are followed exactly.
 # Rails are deterministic: a cart takes the shape of the block it is on, so there is never a choice to model.
@@ -13,7 +12,9 @@ function run {
 	scoreboard players set #gap train.tmp 99000
 	scoreboard players set #n train.tmp 0
 	scoreboard players operation #h train.tmp = @s train.dir
-	execute at @s align xyz run function train:trace/step
+	# A cart at the very top of a slope has feet a hair over the block, so its block is air and the rail is the one below
+	execute at @s align xyz if block ~ ~ ~ #minecraft:rails run function train:trace/step
+	execute at @s align xyz unless block ~ ~ ~ #minecraft:rails if block ~ ~-1 ~ #minecraft:rails positioned ~ ~-1 ~ run function train:trace/step
 	function train:trace/unmark
 }
 
@@ -49,7 +50,17 @@ const head = [
 	"\texecute if score #n train.tmp >= #reach train.const run return 0",
 	"\tscoreboard players add #n train.tmp 1",
 ];
-emit.mcb("function step {\n" + head.concat(table).join("\n") + "\n}");
+// The first block only. A head already inside a block, heading toward one of its edges, has no entry edge for that heading when the block is
+// a curve, it came in on the other one. Leaving through the edge it is heading for is the same move as the table's, so it goes straight to
+// the next block
+const inside = [];
+for (const [shape, s] of Object.entries(SHAPES)) {
+	for (const edge of s.edges) {
+		const kind = s.high === edge ? "up" : "go";
+		inside.push(`\texecute if score #n train.tmp matches 1 if score #h train.tmp matches ${HEAD[edge]} if block ~ ~ ~ #minecraft:rails[shape=${shape}] run return run function train:trace/${kind}_${edge}`);
+	}
+}
+emit.mcb("function step {\n" + head.concat(table, inside).join("\n") + "\n}");
 
 // Moves one block in a direction and keeps walking. go tries the same level then one down, up tries one up only
 const MOVE = { n: [0, -1], e: [1, 0], s: [0, 1], w: [-1, 0] };

@@ -1,4 +1,3 @@
-# TODO: Manual review needed. Please delete this line after review.
 # Look-ahead braking. A head, meaning a furnace cart that isn't a follower, traces the rail ahead once every #period ticks, slot picked by
 # its id so heads spread across the period, and remembers the path distance to the first foreign cart as train.gap. Every tick between
 # traces the gap is aged by the distance the head travelled, and a speed cap comes from it:
@@ -19,13 +18,16 @@ function head {
 	# No heading yet, so no direction to look along. A head parked at a station learns it the first time it moves
 	execute unless score @s train.dir = @s train.dir run return 0
 	execute unless score @s train.id = @s train.id run function train:link/assign_id
-	execute unless score @s train.gap = @s train.gap run scoreboard players set @s train.gap 99000
 
+	# A trace is taken at once when the heading is not the one the last trace looked along, which includes the very first one. Waiting for
+	# the slot would leave the head blind for up to a period, about 4 blocks at 0.2, after it starts or turns a corner
+	scoreboard players set #traced train.tmp 0
+	execute unless score @s train.tdir = @s train.dir run function train:avoid/trace
 	scoreboard players operation #slot train.tmp = @s train.id
 	scoreboard players operation #slot train.tmp += #gen train.tmp
 	scoreboard players operation #slot train.tmp %= #period train.const
-	execute if score #slot train.tmp matches 0 run function train:avoid/trace
-	execute unless score #slot train.tmp matches 0 run function train:avoid/age
+	execute if score #traced train.tmp matches 0 if score #slot train.tmp matches 0 run function train:avoid/trace
+	execute if score #traced train.tmp matches 0 unless score #slot train.tmp matches 0 run function train:avoid/age
 
 	scoreboard players operation #cap train.tmp = @s train.gap
 	scoreboard players operation #cap train.tmp -= #stop train.const
@@ -41,6 +43,8 @@ function trace {
 	function train:trace/run
 	scoreboard players operation @s train.gap = #gap train.tmp
 	scoreboard players operation @s train.chk = #gen train.tmp
+	scoreboard players operation @s train.tdir = @s train.dir
+	scoreboard players set #traced train.tmp 1
 }
 
 # As a head, between traces. The gap shrinks by the distance travelled, the larger axis of the velocity plus 0.4 of the smaller, never below 0
