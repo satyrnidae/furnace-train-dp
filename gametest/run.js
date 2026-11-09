@@ -43,7 +43,17 @@ fs.cpSync(gametestPack, path.join(packs, "gametest"), { recursive: true });
 
 const report = path.join(server, "report.xml");
 fs.rmSync(report, { force: true });
-const status = run(java, ["-DbundlerMainClass=net.minecraft.gametest.Main", "-jar", "server.jar", "--packs", "./packs", "--universe", "./uni", "--report", "./report.xml", "--tests", filter], server);
+const result = spawnSync(java, ["-DbundlerMainClass=net.minecraft.gametest.Main", "-jar", "server.jar", "--packs", "./packs", "--universe", "./uni", "--report", "./report.xml", "--tests", filter], { cwd: server, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+if (result.error) throw result.error;
+const status = result.status;
+const serverLog = `${result.stdout || ""}${result.stderr || ""}`;
+fs.writeFileSync(path.join(server, "run.log"), serverLog);
+// The log lines the tests write with say, the dump of a failing step and the PASS and FAIL of each step, plus anything the server complains about
+for (const line of serverLog.split("\n")) if (/\bgt (dump|FAIL|PASS|shape)\b/.test(line)) console.log(line.replace(/^\[[^\]]*\] \[[^\]]*\]: (\[[^\]]*\] )*/, "  "));
+// A function that fails to parse only warns and the rest of the pack carries on, so it fails the run here, a test calling it would otherwise do nothing
+const loadErrors = [...serverLog.matchAll(/Failed to load function (\S+)/g)].map((m) => m[1]);
+for (const name of new Set(loadErrors)) console.error(`FAIL function did not load: ${name}`);
+if (/Registry loading errors/.test(serverLog)) console.error("FAIL registry loading errors, see run.log");
 
 if (!fs.existsSync(report)) { console.error(`no report written, exit ${status}`); process.exit(status === 0 ? -1 : status); }
 const xml = fs.readFileSync(report, "utf8");
@@ -55,4 +65,5 @@ for (const [, name, body] of cases) {
 	console.log(`${failure ? "FAIL" : "PASS"} ${name}${failure ? `  ${failure[1]}` : ""}`);
 }
 console.log(`${cases.length - failures}/${cases.length} passed`);
-process.exit(failures || (status === 0 ? 0 : status));
+const broken = new Set(loadErrors).size + (/Registry loading errors/.test(serverLog) ? 1 : 0);
+process.exit(failures + broken || (status === 0 ? 0 : status));

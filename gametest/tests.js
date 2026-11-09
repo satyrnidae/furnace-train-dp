@@ -1,15 +1,18 @@
 // TODO: Manual review needed. Please delete this line after review.
 // Test manifest. Read by gametest/generate.js for the structures, environments and instances, and imported by src/train_test.mcb for the
 // poll function of each test.
-// Every test is one test instance with its own environment, so tests run one at a time. The structure holds a start test block, a
+// Every test is one test instance with its own environment, but the runner starts them all at once, and the scenarios share one arena, tags and
+// scores. So each test gets a window on a global tick clock, start below, and its poll does nothing before it. Windows do not overlap,
+// and a test that fails or times out can't hold up the next one. The clock only runs once the arena chunks are loaded, see gt_tick in
+// generate.js. The structure holds a start test block, a
 // command block the start block powers, an accept test block and a fail test block. The command block repeats a poll function, which
 // counts ticks and runs the steps below. A step is [age, function under train_test], age 1 is the first tick. Before each step the
 // score #ok train_test is 1, a step fails the test by setting it to 0. The last step passing accepts the test.
-// All scenarios build their stage at the origin marker, 6 blocks south of the command block, see lib/begin in train_test.mcb.
+// All scenarios build their stage at the origin marker at 100 64 100, see lib/begin in train_test.mcb. The structure is only the scaffold.
 const gametest = {
-	size: [48, 6, 11],
-	// Ticks added to the last step for max_ticks
-	margin: 30,
+	size: [8, 2, 1],
+	// Ticks added to the last step for max_ticks. Room for the arena chunks to load before a test's clock starts
+	margin: 300,
 	tests: [
 		{ id: "t0_shared_state", steps: [[1, "t0/run"]] },
 		{ id: "t1_sampler", steps: [[1, "t1/start"], [6, "t1/check"], [9, "t1/tp"], [10, "t1/check_tp"], [13, "t1/roots"]] },
@@ -22,7 +25,7 @@ const gametest = {
 		{ id: "trace_shapes", steps: [[1, "trace/each_shapes"]] },
 		{ id: "t2_parked_cart", steps: [[1, "t2/start"], [401, "t2/check"]] },
 		{ id: "t3_parked_train", steps: [[1, "t3/start"], [401, "t3/check"]] },
-		{ id: "t4_resume", steps: [[1, "t4/start"], [301, "t4/pop"], [421, "t4/check"]] },
+		{ id: "t4_resume", steps: [[1, "t4/start"], [301, "t4/pop"], [346, "t4/check"]] },
 		{ id: "t5_stagger", steps: [[1, "t5/start"], [46, "t5/check"]] },
 		{ id: "t6_no_heading", steps: [[1, "t6/start"], [61, "t6/check"]] },
 		{ id: "t7_own_block", steps: [[1, "t7/start"]] },
@@ -35,5 +38,13 @@ const gametest = {
 		{ id: "t14_boom_survivor", steps: [[1, "t14/start"]] },
 	],
 };
+
+// A test's window starts when the one before it has run its last step, plus slack for its cleanup
+let start = 0;
+for (const t of gametest.tests) {
+	t.last = Math.max(...t.steps.map(([age]) => age));
+	t.start = start;
+	start += t.last + 10;
+}
 
 module.exports = { gametest };

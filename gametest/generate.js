@@ -54,14 +54,24 @@ function generate(root) {
 	fs.rmSync(out, { recursive: true, force: true });
 	const data = path.join(out, "data", "train_test");
 	for (const d of ["structure", "test_environment", "test_instance"]) fs.mkdirSync(path.join(data, d), { recursive: true });
+	// Runs every tick of the test server and never in a real world, this pack is only loaded by gametest/run.js. Keeps the arena chunks of
+	// every scenario forceloaded, they are at 100 64 100 and far from the structures, and counts the global clock the test windows use
+	// once the far corner of the arena is loaded. lib/ref clones to z up to 100 + 24
+	fs.mkdirSync(path.join(data, "function"), { recursive: true });
+	fs.writeFileSync(path.join(data, "function", "gt_tick.mcfunction"), [
+		"execute unless loaded 100 64 100 run forceload add 90 90 160 130",
+		"execute if loaded 100 64 100 if loaded 160 64 130 run scoreboard players add #clock train_test 1",
+		"",
+	].join("\n"));
+	fs.mkdirSync(path.join(out, "data", "minecraft", "tags", "function"), { recursive: true });
+	fs.writeFileSync(path.join(out, "data", "minecraft", "tags", "function", "tick.json"), JSON.stringify({ values: ["train_test:gt_tick"] }));
 	fs.writeFileSync(path.join(out, "pack.mcmeta"), JSON.stringify({ pack: { description: "train gametests", min_format: 121, max_format: 121 } }, null, 2));
 	for (const t of gametest.tests) {
-		const last = Math.max(...t.steps.map(([age]) => age));
 		fs.writeFileSync(path.join(data, "structure", `${t.id}.nbt`), structure(`function train_test:gt/${t.id}`, gametest.size));
 		fs.writeFileSync(path.join(data, "test_environment", `${t.id}.json`), JSON.stringify({ type: "minecraft:all_of", definitions: [] }));
 		fs.writeFileSync(path.join(data, "test_instance", `${t.id}.json`), JSON.stringify({
 			type: "minecraft:block_based", environment: `train_test:${t.id}`, structure: `train_test:${t.id}`,
-			max_ticks: last + gametest.margin, setup_ticks: 1,
+			max_ticks: t.start + t.last + gametest.margin, setup_ticks: 1,
 		}));
 	}
 	return out;
