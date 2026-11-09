@@ -1,0 +1,65 @@
+# TODO: Manual review needed. Please delete this line after review.
+# Furnace cart sampler. Every tick each furnace cart stores its position and the change since last tick as its velocity, in thousandths
+# of a block per tick. A head also keeps its last heading. Crash detection reads these for every furnace cart, braking reads them for heads.
+# A cart that has just spawned has no previous position, it is initialized to the current one so its first velocity is 0.
+# A move of more than 0.45 blocks in a tick is a teleport, nothing real goes that fast, and reads as 0.
+
+# Runs first in train:tick
+function tick {
+	execute as @e[type=minecraft:furnace_minecart] at @s run function train:sample/cart
+}
+
+# As a furnace cart
+function cart {
+	execute store result score #px train.tmp run data get entity @s Pos[0] 1000
+	execute store result score #pz train.tmp run data get entity @s Pos[2] 1000
+	execute unless score @s train.ppx = @s train.ppx run scoreboard players operation @s train.ppx = #px train.tmp
+	execute unless score @s train.ppz = @s train.ppz run scoreboard players operation @s train.ppz = #pz train.tmp
+	scoreboard players operation #vx train.tmp = #px train.tmp
+	scoreboard players operation #vx train.tmp -= @s train.ppx
+	scoreboard players operation #vz train.tmp = #pz train.tmp
+	scoreboard players operation #vz train.tmp -= @s train.ppz
+	scoreboard players operation @s train.ppx = #px train.tmp
+	scoreboard players operation @s train.ppz = #pz train.tmp
+	scoreboard players set #tp train.tmp 0
+	execute if score #vx train.tmp matches 451.. run scoreboard players set #tp train.tmp 1
+	execute if score #vx train.tmp matches ..-451 run scoreboard players set #tp train.tmp 1
+	execute if score #vz train.tmp matches 451.. run scoreboard players set #tp train.tmp 1
+	execute if score #vz train.tmp matches ..-451 run scoreboard players set #tp train.tmp 1
+	execute if score #tp train.tmp matches 1 run scoreboard players set #vx train.tmp 0
+	execute if score #tp train.tmp matches 1 run scoreboard players set #vz train.tmp 0
+	scoreboard players operation @s train.svx = #vx train.tmp
+	scoreboard players operation @s train.svz = #vz train.tmp
+
+	# Heading, heads only. Under 0.02 it keeps the old one, a parked head still knows which way it will leave
+	execute if entity @s[tag=train.follower] run return 0
+	scoreboard players operation #ax train.tmp = #vx train.tmp
+	execute if score #ax train.tmp matches ..-1 run scoreboard players operation #ax train.tmp *= #-1 train.const
+	scoreboard players operation #az train.tmp = #vz train.tmp
+	execute if score #az train.tmp matches ..-1 run scoreboard players operation #az train.tmp *= #-1 train.const
+	scoreboard players operation #as train.tmp = #ax train.tmp
+	scoreboard players operation #as train.tmp += #az train.tmp
+	execute if score #as train.tmp matches ..19 run return 0
+	execute if score #ax train.tmp >= #az train.tmp if score #vx train.tmp matches 1.. run scoreboard players set @s train.dir 1
+	execute if score #ax train.tmp >= #az train.tmp if score #vx train.tmp matches ..-1 run scoreboard players set @s train.dir 3
+	execute unless score #ax train.tmp >= #az train.tmp if score #vz train.tmp matches 1.. run scoreboard players set @s train.dir 2
+	execute unless score #ax train.tmp >= #az train.tmp if score #vz train.tmp matches ..-1 run scoreboard players set @s train.dir 0
+}
+
+# As a cart. Sets #root train.tmp to the id of the head of its train, giving the cart an id first if it has none. A lone cart is its own
+# head. Walks at most 32 links, the walk is bounded in case a train was ever linked into a loop
+function root_of {
+	execute unless score @s train.id = @s train.id run function train:link/assign_id
+	scoreboard players set #n train.tmp 0
+	function train:sample/up
+}
+
+# As a cart. Records its id as the root, then goes to the cart it follows, the last cart reached is the head
+function up {
+	scoreboard players operation #root train.tmp = @s train.id
+	execute unless entity @s[tag=train.follower] run return 0
+	scoreboard players add #n train.tmp 1
+	execute if score #n train.tmp matches 33.. run return 0
+	scoreboard players operation #prev train.tmp = @s train.prev
+	execute as @e[type=#train:carts] if score @s train.id = #prev train.tmp run function train:sample/up
+}

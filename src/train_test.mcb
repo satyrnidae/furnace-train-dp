@@ -34,6 +34,76 @@ function lib/report {
 }
 #endregion
 
+#region Task 2 sampler
+# Furnace a moves, b and c stand. Timing note: scheduled functions run after train:tick in the same tick, so a check at Nt sees the
+# sampler's result for tick N.
+function t1/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run fill ~2 ~ ~ ~42 ~ ~ minecraft:rail[shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~5 ~ ~ {Tags:["tt","tt.a"],Motion:[0.2d,0d,0d]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~20 ~ ~ {Tags:["tt","tt.b"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~30 ~ ~ {Tags:["tt","tt.c"]}
+	schedule function train_test:t1/check 5t
+	schedule function train_test:t1/tp 8t
+	schedule function train_test:t1/check_tp 9t
+	schedule function train_test:t1/roots 12t
+}
+
+# A moving furnace has a velocity and a heading east, a parked one has neither
+function t1/check {
+	scoreboard players set #ok train_test 1
+	scoreboard players set #v train_test -9999
+	execute store result score #v train_test run scoreboard players get @e[tag=tt.a,limit=1] train.svx
+	execute unless score #v train_test matches 100..250 run scoreboard players set #ok train_test 0
+	scoreboard players set #v train_test -9999
+	execute store result score #v train_test run scoreboard players get @e[tag=tt.a,limit=1] train.dir
+	execute unless score #v train_test matches 1 run scoreboard players set #ok train_test 0
+	scoreboard players set #v train_test -9999
+	execute store result score #v train_test run scoreboard players get @e[tag=tt.b,limit=1] train.svx
+	execute unless score #v train_test matches -10..10 run scoreboard players set #ok train_test 0
+	execute if score @e[tag=tt.b,limit=1] train.dir matches -100..100 run scoreboard players set #ok train_test 0
+	data modify storage train_test:cur name set value "t1 sampler velocity and heading"
+	function train_test:lib/report with storage train_test:cur
+}
+
+function t1/tp {
+	execute as @e[tag=tt.c] at @s run tp @s ~15 ~ ~
+}
+
+# A teleport is not a speed, the tick after it the velocity is 0, never the 450 clamp
+function t1/check_tp {
+	scoreboard players set #ok train_test 1
+	scoreboard players set #v train_test -9999
+	execute store result score #v train_test run scoreboard players get @e[tag=tt.c,limit=1] train.svx
+	execute unless score #v train_test matches 0 run scoreboard players set #ok train_test 0
+	data modify storage train_test:cur name set value "t1 sampler teleport reads as 0"
+	function train_test:lib/report with storage train_test:cur
+}
+
+# root_of on a follower is its head, on a lone cart a new id of its own
+function t1/roots {
+	scoreboard players set #ok train_test 1
+	execute as @e[tag=tt.a,limit=1] unless score @s train.id = @s train.id run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.a,limit=1] train.id
+	execute as @e[tag=tt.b,limit=1] run function train:link/apply
+	scoreboard players operation #aid train_test = @e[tag=tt.a,limit=1] train.id
+	execute as @e[tag=tt.a,limit=1] run function train:sample/root_of
+	scoreboard players operation #r0 train_test = #root train.tmp
+	execute as @e[tag=tt.b,limit=1] run function train:sample/root_of
+	scoreboard players operation #r1 train_test = #root train.tmp
+	execute as @e[tag=tt.c,limit=1] run function train:sample/root_of
+	scoreboard players operation #r2 train_test = #root train.tmp
+	execute unless score #r0 train_test = #aid train_test run scoreboard players set #ok train_test 0
+	execute unless score #r1 train_test = #aid train_test run scoreboard players set #ok train_test 0
+	execute if score #r2 train_test = #aid train_test run scoreboard players set #ok train_test 0
+	execute unless score #r2 train_test matches 1.. run scoreboard players set #ok train_test 0
+	data modify storage train_test:cur name set value "t1 sampler root_of"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+#endregion
+
 #region Task 1 shared state
 # Objectives and constants exist, every minecart type is a train cart
 function self_check {
