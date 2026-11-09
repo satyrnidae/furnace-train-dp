@@ -1,0 +1,46 @@
+# TODO: Manual review needed. Please delete this line after review.
+# Click catchers. An interaction entity parked on a cart takes the player's click, since sneaking stops the cart from taking it.
+# They only exist while someone is sneaking nearby with a coupler or shears, and punching a cart doesn't work meanwhile.
+
+# Carts within 6 blocks of a sneaking player holding a coupler or shears get a catcher, everything else loses it
+function arm {
+	tag @e[type=#train:carts,tag=train.hot] remove train.hot
+	execute as @a at @s if predicate train:sneaking if items entity @s weapon.* #train:tools as @e[type=#train:carts,distance=..6] run tag @s add train.hot
+	execute as @e[type=#train:carts,tag=train.hot] at @s run function train:click/hot_cart
+	execute as @e[type=minecraft:interaction,tag=train.hit] run function train:click/hit_gc
+}
+
+# As a hot cart, at the cart. Keeps one interaction entity parked on it
+function hot_cart {
+	execute unless score @s train.id = @s train.id run function train:link/assign_id
+	scoreboard players operation #cid train.tmp = @s train.id
+	scoreboard players set #has train.tmp 0
+	execute as @e[type=minecraft:interaction,tag=train.hit,distance=..4] if score @s train.id = #cid train.tmp run function train:click/hit_move
+	execute if score #has train.tmp matches 0 run summon minecraft:interaction ~ ~ ~ {Tags:["train.hit","train.fresh","train.new"],width:1.1f,height:0.9f,response:true}
+	execute if score #has train.tmp matches 0 run scoreboard players operation @e[type=minecraft:interaction,tag=train.new,limit=1,distance=..1] train.id = #cid train.tmp
+	tag @e[type=minecraft:interaction,tag=train.new] remove train.new
+}
+
+# As an interaction entity, positioned at its cart
+function hit_move {
+	tp @s ~ ~ ~
+	tag @s add train.fresh
+	scoreboard players set #has train.tmp 1
+}
+
+# As an interaction entity. Nothing refreshed it this tick, so no hot cart wants it
+function hit_gc {
+	execute unless entity @s[tag=train.fresh] run kill @s
+	tag @s remove train.fresh
+}
+
+# As an interaction entity, at it. Someone right clicked it
+function hit {
+	scoreboard players operation #cid train.tmp = @s train.id
+	execute as @e[type=#train:carts,distance=..4] if score @s train.id = #cid train.tmp run tag @s add train.target
+	# Target is the last entity to right click an interaction entity
+	execute on target run function train:link/use
+	tag @e[tag=train.target] remove train.target
+	data remove entity @s interaction
+	data remove entity @s attack
+}

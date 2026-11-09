@@ -1,0 +1,140 @@
+# TODO: Manual review needed. Please delete this line after review.
+# Follower control. Each follower copies the speed of the cart ahead along the line to it, plus a correction toward 2 blocks of
+# spacing, and gets that written as its Motion every tick. Rail physics keeps the speed and puts the direction on the track.
+# The leader's speed is its real displacement since last tick. The Motion tag of a jammed cart holds whatever piled up, 3+ blocks
+# per tick was seen, and copying that made carts ram each other.
+# Spacing is 2 blocks because vanilla carts shove each other when hitboxes inflated by 0.2 touch, about 1.4 apart, and that fights the controller.
+# Hairpins and other track that doubles back are not supported. The pull is toward the leader in a straight line, so where the leader
+# is behind the follower the cart is dragged back along the track and stalls.
+
+# As a follower cart, at the follower
+function tick {
+	scoreboard players operation #prev train.tmp = @s train.prev
+	scoreboard players operation #self train.tmp = @s train.id
+	scoreboard players set #found train.tmp 0
+	execute store result score #fx train.tmp run data get entity @s Pos[0] 1000
+	execute store result score #fy train.tmp run data get entity @s Pos[1] 1000
+	execute store result score #fz train.tmp run data get entity @s Pos[2] 1000
+	execute as @e[type=#train:carts,distance=..8] if score @s train.id = #prev train.tmp run function train:follow/leader_sample
+	execute if score #found train.tmp matches 0 run return run function train:link/unlink
+
+	# Vector to the leader
+	scoreboard players operation #dx train.tmp = #lx train.tmp
+	scoreboard players operation #dx train.tmp -= #fx train.tmp
+	scoreboard players operation #dz train.tmp = #lz train.tmp
+	scoreboard players operation #dz train.tmp -= #fz train.tmp
+	scoreboard players operation #dsq train.tmp = #dx train.tmp
+	scoreboard players operation #dsq train.tmp *= #dx train.tmp
+	scoreboard players operation #t train.tmp = #dz train.tmp
+	scoreboard players operation #t train.tmp *= #dz train.tmp
+	scoreboard players operation #dsq train.tmp += #t train.tmp
+
+	# Gap length, newton from last tick's value. Never lets the estimate collapse to 0, newton can't recover from that
+	scoreboard players operation #len train.tmp = @s train.len
+	execute if score #len train.tmp matches ..99 run scoreboard players set #len train.tmp 1500
+	function train:follow/sqrt
+	function train:follow/sqrt
+	execute if score #len train.tmp matches ..99 run scoreboard players set #len train.tmp 100
+	scoreboard players operation @s train.len = #len train.tmp
+
+	# Chain display at the midpoint, raised 0.4
+	scoreboard players operation #cx train.tmp = #fx train.tmp
+	scoreboard players operation #cx train.tmp += #lx train.tmp
+	scoreboard players operation #cx train.tmp /= #2 train.const
+	scoreboard players operation #cy train.tmp = #fy train.tmp
+	scoreboard players operation #cy train.tmp += #ly train.tmp
+	scoreboard players operation #cy train.tmp /= #2 train.const
+	scoreboard players add #cy train.tmp 400
+	scoreboard players operation #cz train.tmp = #fz train.tmp
+	scoreboard players operation #cz train.tmp += #lz train.tmp
+	scoreboard players operation #cz train.tmp /= #2 train.const
+	execute as @e[type=minecraft:block_display,tag=train.chain,distance=..12] if score @s train.id = #self train.tmp run function train:chain/apply
+	tag @e[tag=train.lead_now] remove train.lead_now
+
+	# Speed along the heading to the leader is the leader's speed on that heading plus a correction toward the spacing.
+	# Gap over spacing speeds up, gap under slows or backs off, so energy never builds up down the train
+	scoreboard players operation #sp train.tmp = #vx train.tmp
+	scoreboard players operation #sp train.tmp *= #dx train.tmp
+	scoreboard players operation #t train.tmp = #vz train.tmp
+	scoreboard players operation #t train.tmp *= #dz train.tmp
+	scoreboard players operation #sp train.tmp += #t train.tmp
+	scoreboard players operation #sp train.tmp /= #len train.tmp
+	scoreboard players operation #err train.tmp = #len train.tmp
+	scoreboard players operation #err train.tmp -= #2000 train.const
+	# Too close backs off 2.5x harder than too far catches up
+	scoreboard players set #gain train.tmp 20
+	execute if score #err train.tmp matches ..-1 run scoreboard players set #gain train.tmp 50
+	scoreboard players operation #err train.tmp *= #gain train.tmp
+	scoreboard players operation #err train.tmp /= #100 train.const
+	scoreboard players operation #sp train.tmp += #err train.tmp
+	execute if score #sp train.tmp matches 450.. run scoreboard players set #sp train.tmp 450
+	execute if score #sp train.tmp matches ..-300 run scoreboard players set #sp train.tmp -300
+
+	# Powered rails act on the cart after the write
+	execute if block ~ ~ ~ minecraft:powered_rail[powered=true] run function train:follow/boost_comp
+	execute if block ~ ~ ~ minecraft:powered_rail[powered=false] run function train:follow/brake_comp
+
+	# Motion is the unit heading times the speed
+	scoreboard players operation #mx train.tmp = #dx train.tmp
+	scoreboard players operation #mx train.tmp *= #sp train.tmp
+	scoreboard players operation #mx train.tmp /= #len train.tmp
+	scoreboard players operation #mz train.tmp = #dz train.tmp
+	scoreboard players operation #mz train.tmp *= #sp train.tmp
+	scoreboard players operation #mz train.tmp /= #len train.tmp
+
+	# Within 0.3 blocks the heading means nothing and writing it would cancel vanilla's push between carts, so motion is left alone
+	execute unless score #dsq train.tmp matches ..89999 store result entity @s Motion[0] double 0.001 run scoreboard players get #mx train.tmp
+	execute unless score #dsq train.tmp matches ..89999 store result entity @s Motion[2] double 0.001 run scoreboard players get #mz train.tmp
+
+	# Furnace followers burn fuel and push along their own PushX and PushZ, which fights the controller.
+	# Only written when something is set, NBT writes every tick aren't free
+	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {Fuel:0s} run data modify entity @s Fuel set value 0s
+	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {PushX:0.0d,PushZ:0.0d} run data merge entity @s {PushX:0.0d,PushZ:0.0d}
+}
+
+# As the leader cart
+function leader_sample {
+	scoreboard players set #found train.tmp 1
+	tag @s add train.lead_now
+	execute store result score #lx train.tmp run data get entity @s Pos[0] 1000
+	execute store result score #ly train.tmp run data get entity @s Pos[1] 1000
+	execute store result score #lz train.tmp run data get entity @s Pos[2] 1000
+	# Real velocity is the position change since the last sample
+	scoreboard players add @s train.lpx 0
+	scoreboard players add @s train.lpz 0
+	scoreboard players operation #vx train.tmp = #lx train.tmp
+	scoreboard players operation #vx train.tmp -= @s train.lpx
+	scoreboard players operation #vz train.tmp = #lz train.tmp
+	scoreboard players operation #vz train.tmp -= @s train.lpz
+	scoreboard players operation @s train.lpx = #lx train.tmp
+	scoreboard players operation @s train.lpz = #lz train.tmp
+	# The first sample after linking has no history and teleports spike. Nothing real passes 0.45
+	execute if score #vx train.tmp matches 450.. run scoreboard players set #vx train.tmp 450
+	execute if score #vx train.tmp matches ..-450 run scoreboard players set #vx train.tmp -450
+	execute if score #vz train.tmp matches 450.. run scoreboard players set #vz train.tmp 450
+	execute if score #vz train.tmp matches ..-450 run scoreboard players set #vz train.tmp -450
+}
+
+# One newton step, #len = (#len + #dsq / #len) / 2
+function sqrt {
+	scoreboard players operation #q train.tmp = #dsq train.tmp
+	scoreboard players operation #q train.tmp /= #len train.tmp
+	scoreboard players operation #len train.tmp += #q train.tmp
+	scoreboard players operation #len train.tmp /= #2 train.const
+}
+
+# A follower on a powered rail. The rail adds 0.06 to any moving cart after the Motion write, so ask for 0.06 less.
+# Never flips the sign, a request of 0.03 becomes 0
+function boost_comp {
+	scoreboard players operation #o train.tmp = #sp train.tmp
+	execute if score #o train.tmp matches 1.. run scoreboard players remove #sp train.tmp 60
+	execute if score #o train.tmp matches 1.. if score #sp train.tmp matches ..-1 run scoreboard players set #sp train.tmp 0
+	execute if score #o train.tmp matches ..-1 run scoreboard players add #sp train.tmp 60
+	execute if score #o train.tmp matches ..-1 if score #sp train.tmp matches 1.. run scoreboard players set #sp train.tmp 0
+}
+
+# A follower on an unpowered powered rail. The rail halves speed, or zeroes it under 0.03, so ask for double.
+# A follower keeps crawling through and the head never feels it
+function brake_comp {
+	scoreboard players operation #sp train.tmp += #sp train.tmp
+}

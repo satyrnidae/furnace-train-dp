@@ -1,0 +1,13 @@
+{
+  "name": "furnace-train-dp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Furnace minecart trains as a vanilla data pack",
+  "scripts": {
+    "build": "mcb build",
+    "watch": "mcb watch"
+  },
+  "devDependencies": {
+    "mc-build": "4.3.2"
+  }
+}

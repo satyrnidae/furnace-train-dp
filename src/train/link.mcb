@@ -1,0 +1,78 @@
+# TODO: Manual review needed. Please delete this line after review.
+# Coupling. First click is the cart ahead, second is the cart behind, which then follows the first. The clicked cart is tagged
+# train.target by click/hit. Coupler is any chain item, shears cut. Main hand wins when both hands hold a tool.
+
+# As the player, with the clicked cart tagged train.target
+function use {
+	execute unless entity @e[tag=train.target,limit=1] run return 0
+	execute if items entity @s weapon.mainhand minecraft:shears run return run function train:link/uncouple
+	execute if items entity @s weapon.mainhand #train:couplers run return run function train:link/link
+	execute if items entity @s weapon.offhand minecraft:shears run return run function train:link/uncouple
+	function train:link/link
+}
+
+# As the player, holding a coupler
+function link {
+	scoreboard players add @s train.sel 0
+	execute if score @s train.sel matches 1.. run return run function train:link/second
+	function train:link/first
+}
+
+# As the player. First click picks the leader
+function first {
+	scoreboard players operation @s train.sel = @e[tag=train.target,limit=1] train.id
+	title @s actionbar {text:"Coupler: click the cart behind it"}
+	tag @e[tag=train.target] remove train.target
+}
+
+# As the player. Second click is the follower
+function second {
+	scoreboard players operation #lead train.tmp = @s train.sel
+	scoreboard players reset @s train.sel
+	scoreboard players set #ok train.tmp 0
+	execute as @e[tag=train.target,limit=1] run function train:link/apply
+	execute if score #ok train.tmp matches 1 run function train:chain/spawn
+	tag @e[tag=train.target] remove train.target
+	execute if score #ok train.tmp matches 1 run clear @s[gamemode=!creative] #train:couplers 1
+	execute if score #ok train.tmp matches 1 run title @s actionbar {text:"Coupled"}
+	execute if score #ok train.tmp matches 0 run title @s actionbar {text:"Coupler: cancelled"}
+}
+
+# As the follower cart. The same cart clicked twice cancels
+function apply {
+	execute if score @s train.id = #lead train.tmp run return 0
+	# Relinking drops the old chain
+	function train:chain/kill
+	scoreboard players operation @s train.prev = #lead train.tmp
+	scoreboard players set @s train.len 2000
+	tag @s add train.follower
+	scoreboard players set #ok train.tmp 1
+}
+
+# As the player, holding shears
+function uncouple {
+	scoreboard players reset @s train.sel
+	scoreboard players set #cut train.tmp 0
+	# A clicked follower is cut from the cart ahead
+	execute as @e[tag=train.target,tag=train.follower,limit=1] run function train:link/unlink
+	# Otherwise whatever follows the clicked cart is cut
+	execute if score #cut train.tmp matches 0 run scoreboard players operation #cid train.tmp = @e[tag=train.target,limit=1] train.id
+	execute if score #cut train.tmp matches 0 as @e[type=#train:carts,tag=train.follower] if score @s train.prev = #cid train.tmp run function train:link/unlink
+	tag @e[tag=train.target] remove train.target
+	execute if score #cut train.tmp matches 1 run title @s actionbar {text:"Uncoupled"}
+	execute if score #cut train.tmp matches 0 run title @s actionbar {text:"Nothing to uncouple"}
+}
+
+# As a follower cart. Leader gone, out of range, or cut with shears
+function unlink {
+	scoreboard players set #cut train.tmp 1
+	function train:chain/kill
+	tag @s remove train.follower
+	scoreboard players reset @s train.prev
+}
+
+# As a cart with no id yet
+function assign_id {
+	scoreboard players add #next train.id 1
+	scoreboard players operation @s train.id = #next train.id
+}

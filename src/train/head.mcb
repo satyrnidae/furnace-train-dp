@@ -1,0 +1,123 @@
+# TODO: Manual review needed. Please delete this line after review.
+# A head furnace on an unpowered powered rail coasts to the center of the rail block, stops there and holds. Powered again, it gets
+# its saved motion and push back. Fuel is never touched, it burns and can be topped up while stopped. Followers see a still leader and
+# stop with it, and a head at x.5 z.5 puts followers on block centers too.
+# train.halt is 0 running, 2 coasting to the rail center, 1 stopped. Saved motion and push are scores in ten thousandths.
+
+# As a head furnace that isn't a follower, at the head
+function rail {
+	execute if block ~ ~ ~ minecraft:powered_rail[powered=false] run return run function train:head/halt
+	execute if score @s train.halt matches 1..2 run return run function train:head/resume
+	function train:head/track
+}
+
+# As a moving head. Motion and push are remembered every tick. A stop reads these and not the live values, because the unpowered
+# rail brakes the cart before the next tick starts
+function track {
+	execute store result score @s train.smx run data get entity @s Motion[0] 10000
+	execute store result score @s train.smz run data get entity @s Motion[2] 10000
+	execute store result score @s train.spx run data get entity @s PushX 10000
+	execute store result score @s train.spz run data get entity @s PushZ 10000
+}
+
+# As a head on an unpowered powered rail
+function halt {
+	execute if score @s train.halt matches 1 run return run function train:head/hold
+	execute if score @s train.halt matches 2 run return run function train:head/coast
+	# Arriving. A head that was barely moving just centers, a moving one coasts to the middle first
+	scoreboard players operation #ax train.tmp = @s train.smx
+	execute if score #ax train.tmp matches ..-1 run scoreboard players operation #ax train.tmp *= #-1 train.const
+	scoreboard players operation #az train.tmp = @s train.smz
+	execute if score #az train.tmp matches ..-1 run scoreboard players operation #az train.tmp *= #-1 train.const
+	scoreboard players operation #as train.tmp = #ax train.tmp
+	scoreboard players operation #as train.tmp += #az train.tmp
+	execute if score #as train.tmp matches ..99 run return run function train:head/snap
+	scoreboard players set @s train.halt 2
+	function train:head/coast
+}
+
+# As a head, halt 2. Keeps rolling at the saved speed until the center of the rail block along the travel axis
+function coast {
+	execute store result score #hx train.tmp run data get entity @s Pos[0] 1000
+	execute store result score #hz train.tmp run data get entity @s Pos[2] 1000
+	scoreboard players operation #ax train.tmp = @s train.smx
+	execute if score #ax train.tmp matches ..-1 run scoreboard players operation #ax train.tmp *= #-1 train.const
+	scoreboard players operation #az train.tmp = @s train.smz
+	execute if score #az train.tmp matches ..-1 run scoreboard players operation #az train.tmp *= #-1 train.const
+	scoreboard players set #passed train.tmp 0
+	execute if score #ax train.tmp >= #az train.tmp run function train:head/check_x
+	execute unless score #ax train.tmp >= #az train.tmp run function train:head/check_z
+	execute if score #passed train.tmp matches 1 run return run function train:head/snap
+
+	# The rail halves speed every tick, so ask for double. Clamped, vanilla caps carts at 0.4 anyway
+	scoreboard players operation #mx train.tmp = @s train.smx
+	scoreboard players operation #mx train.tmp += @s train.smx
+	scoreboard players operation #mz train.tmp = @s train.smz
+	scoreboard players operation #mz train.tmp += @s train.smz
+	execute if score #mx train.tmp matches 4000.. run scoreboard players set #mx train.tmp 4000
+	execute if score #mx train.tmp matches ..-4000 run scoreboard players set #mx train.tmp -4000
+	execute if score #mz train.tmp matches 4000.. run scoreboard players set #mz train.tmp 4000
+	execute if score #mz train.tmp matches ..-4000 run scoreboard players set #mz train.tmp -4000
+	execute store result entity @s Motion[0] double 0.0001 run scoreboard players get #mx train.tmp
+	execute store result entity @s Motion[2] double 0.0001 run scoreboard players get #mz train.tmp
+	data merge entity @s {PushX:0.0d,PushZ:0.0d}
+}
+
+# The block center is x.5. Moving +x it is passed once the fraction reaches .5, moving -x once it drops to .5
+function check_x {
+	scoreboard players operation #fr train.tmp = #hx train.tmp
+	scoreboard players operation #fr train.tmp %= #1000 train.const
+	execute if score @s train.smx matches 1.. if score #fr train.tmp matches 500.. run scoreboard players set #passed train.tmp 1
+	execute if score @s train.smx matches ..-1 if score #fr train.tmp matches ..500 run scoreboard players set #passed train.tmp 1
+}
+
+function check_z {
+	scoreboard players operation #fr train.tmp = #hz train.tmp
+	scoreboard players operation #fr train.tmp %= #1000 train.const
+	execute if score @s train.smz matches 1.. if score #fr train.tmp matches 500.. run scoreboard players set #passed train.tmp 1
+	execute if score @s train.smz matches ..-1 if score #fr train.tmp matches ..500 run scoreboard players set #passed train.tmp 1
+}
+
+# As a head. Centers on the rail block, x.5 z.5, and stops. Saved motion stays for the resume
+function snap {
+	execute store result score #hx train.tmp run data get entity @s Pos[0] 1000
+	execute store result score #hz train.tmp run data get entity @s Pos[2] 1000
+	scoreboard players operation #r train.tmp = #hx train.tmp
+	scoreboard players operation #r train.tmp %= #1000 train.const
+	scoreboard players operation #sx train.tmp = #hx train.tmp
+	scoreboard players operation #sx train.tmp -= #r train.tmp
+	scoreboard players add #sx train.tmp 500
+	scoreboard players operation #r train.tmp = #hz train.tmp
+	scoreboard players operation #r train.tmp %= #1000 train.const
+	scoreboard players operation #sz train.tmp = #hz train.tmp
+	scoreboard players operation #sz train.tmp -= #r train.tmp
+	scoreboard players add #sz train.tmp 500
+	execute store result entity @s Pos[0] double 0.001 run scoreboard players get #sx train.tmp
+	execute store result entity @s Pos[2] double 0.001 run scoreboard players get #sz train.tmp
+	scoreboard players set @s train.halt 1
+	data merge entity @s {Motion:[0.0d,0.0d,0.0d],PushX:0.0d,PushZ:0.0d}
+}
+
+# As a stopped head, halt 1
+function hold {
+	# Fueling while stopped sets a new push direction, which is kept for the resume
+	execute store result score #px train.tmp run data get entity @s PushX 10000
+	execute store result score #pz train.tmp run data get entity @s PushZ 10000
+	execute unless score #px train.tmp matches 0 run scoreboard players operation @s train.spx = #px train.tmp
+	execute unless score #pz train.tmp matches 0 run scoreboard players operation @s train.spz = #pz train.tmp
+	data merge entity @s {Motion:[0.0d,0.0d,0.0d],PushX:0.0d,PushZ:0.0d}
+}
+
+# As a halted head whose rail is powered now
+function resume {
+	scoreboard players set @s train.halt 0
+	# The Motion tag can hold junk from a jam, nothing real passes 0.4
+	execute if score @s train.smx matches 4000.. run scoreboard players set @s train.smx 4000
+	execute if score @s train.smx matches ..-4000 run scoreboard players set @s train.smx -4000
+	execute if score @s train.smz matches 4000.. run scoreboard players set @s train.smz 4000
+	execute if score @s train.smz matches ..-4000 run scoreboard players set @s train.smz -4000
+	execute store result entity @s Motion[0] double 0.0001 run scoreboard players get @s train.smx
+	execute store result entity @s Motion[2] double 0.0001 run scoreboard players get @s train.smz
+	execute store result entity @s PushX double 0.0001 run scoreboard players get @s train.spx
+	execute store result entity @s PushZ double 0.0001 run scoreboard players get @s train.spz
+}

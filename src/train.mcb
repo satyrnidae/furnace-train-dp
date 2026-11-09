@@ -1,0 +1,62 @@
+# TODO: Manual review needed. Please delete this line after review.
+# Furnace minecart trains. Couple carts with a chain, cut them with shears, and a train follows its head with a chain block between
+# each pair. A head furnace refuels from coal in a chest cart behind it, stops on unpowered powered rails and keeps the chunks around
+# the train forceloaded.
+#
+# Click handling: a function can't see the clicked entity, and a sneaking click on a minecart is a pass so no advancement fires. While
+# a player sneaks with a coupler or shears, carts in reach get an interaction entity parked on them, and its interaction data is the click.
+# Units: positions, gaps and speeds are scores in thousandths of a block, saved motion and push are ten thousandths.
+# Tags, the sneaking predicate and the take_one item modifier are plain JSON under data/train. The couplers tag has optional entries
+# that mcb tags can't express.
+
+#region Setup
+function load minecraft:load {
+	# Per cart
+	scoreboard objectives add train.id dummy
+	scoreboard objectives add train.prev dummy
+	scoreboard objectives add train.sel dummy
+	scoreboard objectives add train.len dummy
+	# Last position of a leader, its speed is the change since the last sample, see follow.mcb
+	scoreboard objectives add train.lpx dummy
+	scoreboard objectives add train.lpz dummy
+	scoreboard objectives add train.halt dummy
+	scoreboard objectives add train.smx dummy
+	scoreboard objectives add train.smz dummy
+	scoreboard objectives add train.spx dummy
+	scoreboard objectives add train.spz dummy
+	# Per chunk, fake players named c<dimension>_<x>_<z>
+	scoreboard objectives add train.cgen dummy
+	scoreboard objectives add train.cpres dummy
+	scoreboard objectives add train.tmp dummy
+	scoreboard objectives add train.const dummy
+	scoreboard players set #2 train.const 2
+	scoreboard players set #-1 train.const -1
+	scoreboard players set #16 train.const 16
+	scoreboard players set #20 train.const 20
+	scoreboard players set #100 train.const 100
+	scoreboard players set #1000 train.const 1000
+	scoreboard players set #2000 train.const 2000
+	scoreboard players set #16000 train.const 16000
+	# Registry of chunks this pack forceloaded, survives reloads
+	execute unless data storage train:chunks active run data modify storage train:chunks active set value []
+	# After a restart carts load a few ticks after the forced chunks do, so skip sweeping for a while
+	scoreboard players set #grace train.tmp 100
+}
+#endregion
+
+function tick minecraft:tick {
+	# Clicks stored on the click catchers. Left clicks are swallowed while armed, the data is dropped so it doesn't pile up
+	execute as @e[type=minecraft:interaction,tag=train.hit] at @s if data entity @s interaction run function train:click/hit
+	execute as @e[type=minecraft:interaction,tag=train.hit] if data entity @s attack run data remove entity @s attack
+
+	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower] at @s run function train:head/rail
+	execute as @e[type=#train:carts,tag=train.follower] at @s run function train:follow/tick
+	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower] run function train:fuel/check
+	execute as @e[type=minecraft:block_display,tag=train.chain] run function train:chain/check
+	function train:click/arm
+
+	# Chunk claims are stamped with this tick, the sweep drops whatever wasn't touched
+	scoreboard players add #gen train.tmp 1
+	execute as @e[type=#train:carts,tag=!train.follower] if score @s train.id = @s train.id at @s run function train:chunks/head
+	function train:chunks/sweep
+}

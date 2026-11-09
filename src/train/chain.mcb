@@ -1,0 +1,86 @@
+# TODO: Manual review needed. Please delete this line after review.
+# The chain between two carts. A block display of the chain item's block, same id as the follower so a pair stays matched.
+# The string block state can't carry an axis, so the chain stays axis y. Its y scale is the length and a 90 degree x rotation lays it
+# onto the display's forward direction, which is aimed at the leader every tick.
+
+<%%
+// Every chain item has a block of the same id. The ids are from memory except iron_chain, and a wrong one fails the function load
+const chains = [
+	"iron_chain",
+	"copper_chain",
+	"exposed_copper_chain",
+	"weathered_copper_chain",
+	"oxidized_copper_chain",
+	"waxed_copper_chain",
+	"waxed_exposed_copper_chain",
+	"waxed_weathered_copper_chain",
+	"waxed_oxidized_copper_chain",
+];
+// Sets the new display's block from the chain in that hand
+for (const hand of ["mainhand", "offhand"]) {
+	const lines = chains.map((id) => `\texecute if items entity @s weapon.${hand} minecraft:${id} run data modify entity @e[type=minecraft:block_display,tag=train.new,limit=1] block_state set value "minecraft:${id}"`);
+	emit.mcb(`function state_${hand} {\n${lines.join("\n")}\n}`);
+}
+%%>
+
+# As the player, after a successful link. The follower is still tagged train.target
+function spawn {
+	execute at @e[tag=train.target,limit=1] run summon minecraft:block_display ~ ~0.4 ~ {Tags:["train.chain","train.new"],teleport_duration:1,interpolation_duration:1,transformation:{translation:[-0.5f,0.5f,-0.75f],left_rotation:[0.70711f,0f,0f,0.70711f],scale:[1f,1.5f,1f],right_rotation:[0f,0f,0f,1f]}}
+	scoreboard players operation @e[tag=train.new,limit=1] train.id = @e[tag=train.target,limit=1] train.id
+	# Block matches whichever chain was used, main hand first
+	execute if items entity @s weapon.mainhand #train:couplers run function train:chain/state_mainhand
+	execute unless items entity @s weapon.mainhand #train:couplers run function train:chain/state_offhand
+	execute if entity @s[gamemode=creative] run tag @e[tag=train.new] add train.nodrop
+	tag @e[tag=train.new] remove train.new
+}
+
+# As a chain display. #cx #cy #cz is the midpoint and #len the gap, in thousandths of a block
+function apply {
+	execute store result entity @s Pos[0] double 0.001 run scoreboard players get #cx train.tmp
+	execute store result entity @s Pos[1] double 0.001 run scoreboard players get #cy train.tmp
+	execute store result entity @s Pos[2] double 0.001 run scoreboard players get #cz train.tmp
+	# Yaw and pitch toward the leader, so local z runs along the link. Aimed from 0.4 lower, otherwise the raise over the cart base tilts it toward the leader's feet
+	execute at @s positioned ~ ~-0.4 ~ facing entity @e[tag=train.lead_now,limit=1] feet run tp @s ~ ~0.4 ~ ~ ~
+	# Length is the gap minus 0.7, so each end tucks about 0.2 blocks into the cart walls and reads as attached
+	scoreboard players operation #clen train.tmp = #len train.tmp
+	scoreboard players remove #clen train.tmp 700
+	execute if score #clen train.tmp matches ..199 run scoreboard players set #clen train.tmp 200
+	# Rotated box is x 0..1, y -1..0, z 0..len from the corner, so the translation is -0.5, 0.5, -len/2 to center it on the entity
+	data modify storage train:tmp tf set value {translation:[-0.5f,0.5f,-0.75f],left_rotation:[0.70711f,0f,0f,0.70711f],scale:[1f,1.5f,1f],right_rotation:[0f,0f,0f,1f]}
+	execute store result storage train:tmp tf.scale[1] float 0.001 run scoreboard players get #clen train.tmp
+	execute store result storage train:tmp tf.translation[2] float -0.0005 run scoreboard players get #clen train.tmp
+	data modify entity @s transformation set from storage train:tmp tf
+	data modify entity @s start_interpolation set value 0
+}
+
+# As a follower cart. Removes its chain display and gives the chain back
+function kill {
+	scoreboard players operation #cid train.tmp = @s train.id
+	execute as @e[type=minecraft:block_display,tag=train.chain] if score @s train.id = #cid train.tmp run function train:chain/free
+}
+
+# As a chain display. Drops the chain item it was made from, where it hangs, and removes it.
+# A link made in creative used no chain, so it gives none back
+function free {
+	execute unless entity @s[tag=train.nodrop] at @s run function train:chain/drop
+	kill @s
+}
+
+# The block id and the item id are the same string for every chain
+function drop {
+	data modify storage train:drop item.id set from entity @s block_state
+	function train:chain/drop_item with storage train:drop item
+}
+
+# Macro
+function drop_item {
+	$summon minecraft:item ~ ~ ~ {Item:{id:"$(id)",count:1}}
+}
+
+# As a chain display. Orphaned when its follower no longer exists, a cart that was destroyed breaks the link too
+function check {
+	scoreboard players operation #cid train.tmp = @s train.id
+	scoreboard players set #alive train.tmp 0
+	execute as @e[type=#train:carts,tag=train.follower] if score @s train.id = #cid train.tmp run scoreboard players set #alive train.tmp 1
+	execute if score #alive train.tmp matches 0 run function train:chain/free
+}

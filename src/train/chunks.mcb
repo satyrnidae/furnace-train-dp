@@ -1,0 +1,145 @@
+# TODO: Manual review needed. Please delete this line after review.
+# Chunk loading. Every cart in a coupled train forceloads the chunks its 15x15 block square touches, so the squares overlap down the
+# train and give the head lead and the tail follow time. Claims are stamped with the tick, a sweep drops whatever wasn't touched.
+# That frees chunks that fall out of range, the whole train when any cart is off the rails, and anything left by a cut link or a dead cart.
+# A chunk that was already forceloaded is remembered as not ours and never removed. Only the overworld, nether and end are handled.
+# Chunk keys are fake players named c<dimension>_<x>_<z> on train.cgen, stamp, and train.cpres, 0 ours and 1 already forced.
+# The registry of claimed chunks is the list train:chunks active.
+
+# As a cart that isn't a follower, at the cart. Only trains with a follower hold chunks
+function head {
+	scoreboard players operation #h train.tmp = @s train.id
+	scoreboard players set #has train.tmp 0
+	execute as @e[type=#train:carts,tag=train.follower] if score @s train.prev = #h train.tmp run scoreboard players set #has train.tmp 1
+	execute if score #has train.tmp matches 0 run return 0
+	# Any cart off the rails means derailed. Nothing gets touched then, so the sweep frees every chunk.
+	# The rail is in the block at the cart or the one below, the top of a slope puts the cart a bit over its rail
+	scoreboard players set #derail train.tmp 0
+	execute unless block ~ ~ ~ #minecraft:rails unless block ~ ~-1 ~ #minecraft:rails run scoreboard players set #derail train.tmp 1
+	scoreboard players operation #cur train.tmp = @s train.id
+	function train:chunks/scan_walk
+	execute if score #derail train.tmp matches 1 run return 0
+	function train:chunks/touch_cart
+	scoreboard players operation #cur train.tmp = @s train.id
+	function train:chunks/apply_walk
+}
+
+function scan_walk {
+	execute as @e[type=#train:carts,tag=train.follower] if score @s train.prev = #cur train.tmp at @s run function train:chunks/scan_visit
+}
+
+# As a follower, at it
+function scan_visit {
+	execute unless block ~ ~ ~ #minecraft:rails unless block ~ ~-1 ~ #minecraft:rails run scoreboard players set #derail train.tmp 1
+	scoreboard players operation #cur train.tmp = @s train.id
+	function train:chunks/scan_walk
+}
+
+function apply_walk {
+	execute as @e[type=#train:carts,tag=train.follower] if score @s train.prev = #cur train.tmp at @s run function train:chunks/apply_visit
+}
+
+# As a follower, at it
+function apply_visit {
+	function train:chunks/touch_cart
+	scoreboard players operation #cur train.tmp = @s train.id
+	function train:chunks/apply_walk
+}
+
+# As a cart, at it. Refreshes every chunk its square touches. Positions are thousandths of a block and floor division by 16000 gives the chunk
+function touch_cart {
+	execute store result score #xm train.tmp run data get entity @s Pos[0] 1000
+	execute store result score #zm train.tmp run data get entity @s Pos[2] 1000
+	scoreboard players set #d train.tmp -1
+	execute if dimension minecraft:overworld run scoreboard players set #d train.tmp 0
+	execute if dimension minecraft:the_nether run scoreboard players set #d train.tmp 1
+	execute if dimension minecraft:the_end run scoreboard players set #d train.tmp 2
+	execute if score #d train.tmp matches -1 run return 0
+	execute if dimension minecraft:overworld run data modify storage train:chunk args.dim set value "minecraft:overworld"
+	execute if dimension minecraft:the_nether run data modify storage train:chunk args.dim set value "minecraft:the_nether"
+	execute if dimension minecraft:the_end run data modify storage train:chunk args.dim set value "minecraft:the_end"
+	execute store result storage train:chunk args.d int 1 run scoreboard players get #d train.tmp
+
+	# The square is the position plus or minus 7.5 blocks, so it spans one or two chunks per axis
+	scoreboard players operation #cx0 train.tmp = #xm train.tmp
+	scoreboard players remove #cx0 train.tmp 7500
+	scoreboard players operation #cx0 train.tmp /= #16000 train.const
+	scoreboard players operation #cx1 train.tmp = #xm train.tmp
+	scoreboard players add #cx1 train.tmp 7500
+	scoreboard players operation #cx1 train.tmp /= #16000 train.const
+	scoreboard players operation #cz0 train.tmp = #zm train.tmp
+	scoreboard players remove #cz0 train.tmp 7500
+	scoreboard players operation #cz0 train.tmp /= #16000 train.const
+	scoreboard players operation #cz1 train.tmp = #zm train.tmp
+	scoreboard players add #cz1 train.tmp 7500
+	scoreboard players operation #cz1 train.tmp /= #16000 train.const
+
+	scoreboard players operation #tx train.tmp = #cx0 train.tmp
+	scoreboard players operation #tz train.tmp = #cz0 train.tmp
+	function train:chunks/touch_at
+	execute unless score #cx1 train.tmp = #cx0 train.tmp run {
+		scoreboard players operation #tx train.tmp = #cx1 train.tmp
+		scoreboard players operation #tz train.tmp = #cz0 train.tmp
+		function train:chunks/touch_at
+	}
+	execute unless score #cz1 train.tmp = #cz0 train.tmp run {
+		scoreboard players operation #tx train.tmp = #cx0 train.tmp
+		scoreboard players operation #tz train.tmp = #cz1 train.tmp
+		function train:chunks/touch_at
+	}
+	execute unless score #cx1 train.tmp = #cx0 train.tmp unless score #cz1 train.tmp = #cz0 train.tmp run {
+		scoreboard players operation #tx train.tmp = #cx1 train.tmp
+		scoreboard players operation #tz train.tmp = #cz1 train.tmp
+		function train:chunks/touch_at
+	}
+}
+
+# Chunk #tx #tz into macro args. bx and bz are the block coordinates of its corner, which is what forceload takes
+function touch_at {
+	execute store result storage train:chunk args.cx int 1 run scoreboard players get #tx train.tmp
+	execute store result storage train:chunk args.cz int 1 run scoreboard players get #tz train.tmp
+	scoreboard players operation #bx train.tmp = #tx train.tmp
+	scoreboard players operation #bx train.tmp *= #16 train.const
+	scoreboard players operation #bz train.tmp = #tz train.tmp
+	scoreboard players operation #bz train.tmp *= #16 train.const
+	execute store result storage train:chunk args.bx int 1 run scoreboard players get #bx train.tmp
+	execute store result storage train:chunk args.bz int 1 run scoreboard players get #bz train.tmp
+	function train:chunks/touch with storage train:chunk args
+}
+
+# Macro. Stamps the chunk with this tick and claims it if it has no entry yet
+function touch {
+	$scoreboard players operation c$(d)_$(cx)_$(cz) train.cgen = #gen train.tmp
+	$execute unless score c$(d)_$(cx)_$(cz) train.cpres matches 0.. run function train:chunks/new with storage train:chunk args
+}
+
+# Macro. cpres 1 means somebody else already forceloaded it, so it is never removed here
+function new {
+	$execute in $(dim) store success score c$(d)_$(cx)_$(cz) train.cpres run forceload query $(bx) $(bz)
+	$execute in $(dim) run forceload add $(bx) $(bz)
+	$data modify storage train:chunks active append value {d:$(d),dim:"$(dim)",cx:$(cx),cz:$(cz),bx:$(bx),bz:$(bz)}
+}
+
+# Releases every registered chunk nothing touched this tick
+function sweep {
+	execute if score #grace train.tmp matches 1.. run return run scoreboard players remove #grace train.tmp 1
+	execute unless data storage train:chunks active run data modify storage train:chunks active set value []
+	data modify storage train:chunks work set from storage train:chunks active
+	data modify storage train:chunks active set value []
+	function train:chunks/sweep_loop
+}
+
+function sweep_loop {
+	execute unless data storage train:chunks work[0] run return 0
+	function train:chunks/sweep_one with storage train:chunks work[0]
+	data remove storage train:chunks work[0]
+	function train:chunks/sweep_loop
+}
+
+# Macro. A fresh chunk stays in the registry, a stale one is released unless it was forced before this pack touched it
+function sweep_one {
+	$execute if score c$(d)_$(cx)_$(cz) train.cgen = #gen train.tmp run data modify storage train:chunks active append value {d:$(d),dim:"$(dim)",cx:$(cx),cz:$(cz),bx:$(bx),bz:$(bz)}
+	$execute unless score c$(d)_$(cx)_$(cz) train.cgen = #gen train.tmp unless score c$(d)_$(cx)_$(cz) train.cpres matches 1 in $(dim) run forceload remove $(bx) $(bz)
+	$execute unless score c$(d)_$(cx)_$(cz) train.cgen = #gen train.tmp run scoreboard players reset c$(d)_$(cx)_$(cz) train.cpres
+	$execute unless score c$(d)_$(cx)_$(cz) train.cgen = #gen train.tmp run scoreboard players reset c$(d)_$(cx)_$(cz) train.cgen
+}

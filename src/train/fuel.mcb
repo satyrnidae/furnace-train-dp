@@ -1,0 +1,46 @@
+# TODO: Manual review needed. Please delete this line after review.
+# A head furnace refuels from coal or charcoal in a chest cart somewhere behind it in its train. Fuel is topped up while it is still
+# above 0, because a furnace cart zeroes its push the moment fuel runs out. One item is 3600 ticks, same as vanilla.
+
+# As a furnace cart that isn't a follower
+function check {
+	execute unless score @s train.id = @s train.id run return 0
+	execute store result score #f train.tmp run data get entity @s Fuel
+	execute unless score #f train.tmp matches 1..119 run return 0
+	scoreboard players operation #cur train.tmp = @s train.id
+	scoreboard players set #fed train.tmp 0
+	tag @s add train.head_now
+	function train:fuel/walk
+	tag @s remove train.head_now
+}
+
+# Visits the follower of cart #cur, then recurses down the train
+function walk {
+	execute as @e[type=#train:carts,tag=train.follower] if score @s train.prev = #cur train.tmp run function train:fuel/visit
+}
+
+# As a cart somewhere behind the head
+function visit {
+	execute if score #fed train.tmp matches 1 run return 0
+	execute if entity @s[type=minecraft:chest_minecart] run function train:fuel/take
+	scoreboard players operation #cur train.tmp = @s train.id
+	function train:fuel/walk
+}
+
+# As a chest cart. The first slot holding fuel gives up one item
+function take {
+	REPEAT(0, 26) as i {
+		execute if score #fed train.tmp matches 0 if items entity @s container.<%i%> #train:fuel run {
+			item modify entity @s container.<%i%> train:take_one
+			scoreboard players set #fed train.tmp 1
+			execute as @e[type=minecraft:furnace_minecart,tag=train.head_now,limit=1] run function train:fuel/add
+		}
+	}
+}
+
+# As the head furnace
+function add {
+	execute store result score #f train.tmp run data get entity @s Fuel
+	scoreboard players add #f train.tmp 3600
+	execute store result entity @s Fuel short 1 run scoreboard players get #f train.tmp
+}
