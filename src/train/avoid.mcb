@@ -1,5 +1,3 @@
-import ../../scale.js
-
 # Look-ahead braking. A head, meaning a furnace cart that isn't a follower, traces the rail ahead once every #period ticks, slot picked by
 # its id so heads spread across the period, and remembers the path distance to the first foreign cart as train.gap. Every tick between
 # traces the gap is aged by the distance the head travelled, and a speed cap comes from it:
@@ -7,6 +5,8 @@ import ../../scale.js
 # At 0.2 blocks per tick a head starts slowing about 4.5 blocks out and stops about 2.5 blocks short. Followers are not touched, they hold
 # their spacing and stop with the head. An unpowered powered rail, halt 1 or 2, takes priority and this skips such a head.
 # train.halt 3 is yielding, see head.mcb. The speed cap has to be under 0.2, a head tops out there, before it counts as blocked.
+
+import ../../scale.js
 
 # Called from train:tick right after the sampler, before head/rail
 function tick {
@@ -49,8 +49,13 @@ function trace {
 	scoreboard players set #traced train.tmp 1
 }
 
-# As a head, between traces. The gap shrinks by the distance travelled, the larger axis of the velocity plus 0.4 of the smaller, never below 0
+# As a head, between traces. The gap shrinks by the distance travelled, the larger axis of the velocity plus 0.4 of the smaller, never below 0.
+# Only travel toward the cart counts. A held head on a slope rolls back a little, and counting that would eat the gap it is holding
 function age {
+	execute if score @s train.dir matches 1 if score @s train.svx matches ..0 run return 0
+	execute if score @s train.dir matches 3 if score @s train.svx matches 0.. run return 0
+	execute if score @s train.dir matches 2 if score @s train.svz matches ..0 run return 0
+	execute if score @s train.dir matches 0 if score @s train.svz matches 0.. run return 0
 	scoreboard players operation #ax train.tmp = @s train.svx
 	execute if score #ax train.tmp matches ..-1 run scoreboard players operation #ax train.tmp *= #-1 train.const
 	scoreboard players operation #az train.tmp = @s train.svz

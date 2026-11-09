@@ -1,11 +1,10 @@
-import ../scale.js
-
-import ../gametest/tests.js
-
 # Test namespace, never part of a release. Every scenario here is run by a gametest test instance, see gametest/tests.js for the list and
 # the ticks each step runs at, and gametest/run.js to run them headless, npm test. A scenario is plain functions that build a stage at the
 # origin marker and spawn carts, and checks that set #ok train_test to 0 when something is wrong. The generated poll functions in the
 # last region call them at the right ticks and power the accept or fail test block.
+
+import ../../../scale.js
+import ../../tests.js
 
 function load minecraft:load {
 	scoreboard objectives add train_test dummy
@@ -799,6 +798,286 @@ function self_check {
 	execute store result score #n train_test if entity @e[type=#train:carts,tag=tt.probe]
 	execute unless score #n train_test matches 4 run scoreboard players set #ok train_test 0
 
+}
+#endregion
+
+# TODO: Manual review needed. Please delete this line after review.
+#region Deferred minors
+# t21 two followers of one leader. A trace marks the whole own train by walking the followers with #cur, which each visit overwrites. That is
+# safe because execute tests every source's if before any run starts, so both siblings are matched against the leader's id first. A test
+# and not a fix: a sibling missed here would read as a foreign cart. The cart behind both is 6 blocks along
+function t21/run {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run {
+		fill ~ ~ ~ ~8 ~ ~ minecraft:rail[shape=east_west]
+		summon minecraft:furnace_minecart ~ ~ ~ {Tags:["tt","tt.h"]}
+		summon minecraft:minecart ~2 ~ ~ {Tags:["tt","tt.f"]}
+		summon minecraft:minecart ~3 ~ ~ {Tags:["tt","tt.g"]}
+		summon minecraft:minecart ~6 ~ ~ {Tags:["tt","tt.x"]}
+	}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
+	execute as @e[tag=tt.h,limit=1] run function train:link/assign_id
+	execute as @e[tag=tt.f,limit=1] run function train:link/assign_id
+	execute as @e[tag=tt.g,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.h,limit=1] train.id
+	execute as @e[tag=tt.f,limit=1] run function train:link/apply
+	execute as @e[tag=tt.g,limit=1] run function train:link/apply
+	scoreboard players set #want train_test <%6 * UNIT%>
+	scoreboard players set #ok train_test 1
+	function train_test:trace/shoot
+}
+
+# t22 a snap to the rail center is not a speed. The sampler reads the move as velocity unless the snap resyncs it, and a head at 0.4 off
+# center would read 0.4 for one tick, enough to look like a hard hit. The head sits at x.4 and snaps to x.5, the sampler is run on both sides
+function t22/run {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~3.9 ~ ~ {Tags:["tt","tt.h"]}
+	execute as @e[tag=tt.h,limit=1] at @s run function train:sample/cart
+	execute as @e[tag=tt.h,limit=1] run function train:head/snap
+	execute as @e[tag=tt.h,limit=1] at @s run function train:sample/cart
+	scoreboard players set #ok train_test 1
+	execute unless entity @e[tag=tt.h,scores={train.svx=0,train.svz=0}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.halt=1}] run scoreboard players set #ok train_test 0
+}
+
+# t23 gap aging. Per tick the gap shrinks by the distance travelled along the heading and not at all when the head drifts the other way,
+# a held head on a slope rolls back and used to eat its own gap. Cases: heading, vx, vz, gap before, gap after. Forward is the larger axis
+# plus 0.4 of the smaller, never below 0
+<%%
+const age = (heading, vx, vz, gap) => {
+	const big = Math.max(Math.abs(vx), Math.abs(vz));
+	const small = Math.floor(Math.min(Math.abs(vx), Math.abs(vz)) * 4 / 10);
+	const forward = (heading === 1 && vx > 0) || (heading === 3 && vx < 0) || (heading === 2 && vz > 0) || (heading === 0 && vz < 0);
+	return forward ? Math.max(0, gap - big - small) : gap;
+};
+const g = u(10);
+const CASES = [
+	[1, u(0.3), 0, g], [1, -u(0.3), 0, g], [1, u(0.3), u(0.2), g], [1, u(0.3), -u(0.2), g], [1, 0, 0, g], [1, u(0.3), 0, u(0.1)],
+	[3, -u(0.3), 0, g], [3, u(0.3), 0, g],
+	[2, 0, u(0.3), g], [2, 0, -u(0.3), g],
+	[0, 0, -u(0.3), g], [0, 0, u(0.3), g],
+];
+const lines = [
+	"\tfunction train_test:lib/begin",
+	"\tfunction train_test:lib/flat",
+	"\texecute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~3 ~ ~ {Tags:[\"tt\",\"tt.h\"]}",
+	"\tscoreboard players set #ok train_test 1",
+];
+CASES.forEach(([heading, vx, vz, gap], i) => {
+	lines.push(`\tscoreboard players set @e[tag=tt.h,limit=1] train.dir ${heading}`);
+	lines.push(`\tscoreboard players set @e[tag=tt.h,limit=1] train.svx ${vx}`);
+	lines.push(`\tscoreboard players set @e[tag=tt.h,limit=1] train.svz ${vz}`);
+	lines.push(`\tscoreboard players set @e[tag=tt.h,limit=1] train.gap ${gap}`);
+	lines.push("\texecute as @e[tag=tt.h,limit=1] run function train:avoid/age");
+	lines.push(`\texecute unless entity @e[tag=tt.h,scores={train.gap=${age(heading, vx, vz, gap)}}] run scoreboard players set #ok train_test 0`);
+	lines.push(`\texecute unless entity @e[tag=tt.h,scores={train.gap=${age(heading, vx, vz, gap)}}] run say gt dump age case ${i} FAIL heading ${heading} v ${vx} ${vz} gap ${gap} want ${age(heading, vx, vz, gap)}`);
+});
+emit.mcb("function t23/run {\n" + lines.join("\n") + "\n}");
+%%>
+
+# t24 a hard hit that vanilla's minecart push had already slowed. Within about 1.18 blocks the push cuts both carts to a fifth of their
+# motion, so the sampler reads the tick after a 0.3 closing as nearly 0 and the pair is inside the scan radius. The sampler keeps last tick's
+# velocity too and the larger relative speed of the two decides. Last tick 0.3 against 0.3, now both carts read 0
+function t24/run {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10 ~ ~ {Tags:["tt","tt.a"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~11 ~ ~ {Tags:["tt","tt.b"]}
+	function train_test:lib/hard_closing
+	scoreboard players operation @e[tag=tt.a,limit=1] train.pvx = @e[tag=tt.a,limit=1] train.svx
+	scoreboard players operation @e[tag=tt.b,limit=1] train.pvx = @e[tag=tt.b,limit=1] train.svx
+	scoreboard players set @e[tag=tt.a,limit=1] train.pvz 0
+	scoreboard players set @e[tag=tt.b,limit=1] train.pvz 0
+	scoreboard players set @e[tag=tt.a,limit=1] train.svx 0
+	scoreboard players set @e[tag=tt.b,limit=1] train.svx 0
+	function train:crash/tick
+	scoreboard players set #ok train_test 1
+	execute if entity @e[type=minecraft:furnace_minecart,tag=tt] run scoreboard players set #ok train_test 0
+	execute store result score #n train_test at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:furnace_minecart"}},distance=..64]
+	execute unless score #n train_test matches 2 run scoreboard players set #ok train_test 0
+}
+
+# t24 again with the carts on rails one block apart. Last tick hard, now both read 0, and the sideways offset of 1.0 still says they passed
+# without touching, the pair has to use the same offset check on whichever velocity it picked
+function t24/parallel {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10 ~ ~ {Tags:["tt","tt.a"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10.3 ~ ~1 {Tags:["tt","tt.b"]}
+	function train_test:lib/hard_closing
+	scoreboard players operation @e[tag=tt.a,limit=1] train.pvx = @e[tag=tt.a,limit=1] train.svx
+	scoreboard players operation @e[tag=tt.b,limit=1] train.pvx = @e[tag=tt.b,limit=1] train.svx
+	scoreboard players set @e[tag=tt.a,limit=1] train.pvz 0
+	scoreboard players set @e[tag=tt.b,limit=1] train.pvz 0
+	scoreboard players set @e[tag=tt.a,limit=1] train.svx 0
+	scoreboard players set @e[tag=tt.b,limit=1] train.svx 0
+	function train:crash/tick
+	scoreboard players set #ok train_test 1
+	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+}
+
+# Powered rail, unpowered, at block 11 of the strip. The cart ahead is 14 along, a head from 3 starts yielding about 4.5 blocks out, at 9.5,
+# so it is already braking when it reaches the rail
+function lib/rail_stage {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/head
+	execute at @e[tag=tt.origin,limit=1] run setblock ~11 ~ ~ minecraft:powered_rail[powered=false,shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~14 ~ ~ {Tags:["tt","tt.x"]}
+}
+
+# t25 an unpowered powered rail wins over yielding. The head is already braking when it reaches the rail, it stops on the center of the block
+# and stays there, and when the rail gets power it goes on and yields to the cart again, 3 blocks on
+function t25/start {
+	function train_test:lib/rail_stage
+}
+function t25/at_rail {
+	scoreboard players set #ok train_test 1
+	execute unless entity @e[tag=tt.h,scores={train.halt=1}] run scoreboard players set #ok train_test 0
+	execute store result score #hx train_test run data get entity @e[tag=tt.h,limit=1] Pos[0] <%UNIT%>
+	execute unless score #hx train_test matches <%u(111.4)%>..<%u(111.6)%> run scoreboard players set #ok train_test 0
+}
+function t25/power {
+	execute at @e[tag=tt.origin,limit=1] run setblock ~11 ~ ~1 minecraft:redstone_block
+}
+function t25/check {
+	function train_test:lib/stopped_short
+}
+
+# t26 avoid leaves a head alone while a rail holds it, halt 1 stopped or 2 coasting, even with a cart 2 blocks ahead. One call, and the
+# head must not have been traced either
+function t26/run {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~3 ~ ~ {Tags:["tt","tt.h"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~5 ~ ~ {Tags:["tt","tt.x"]}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
+	scoreboard players set #ok train_test 1
+	scoreboard players set @e[tag=tt.h,limit=1] train.halt 1
+	execute as @e[tag=tt.h,limit=1] at @s run function train:avoid/head
+	execute unless entity @e[tag=tt.h,scores={train.halt=1}] run scoreboard players set #ok train_test 0
+	execute if score @e[tag=tt.h,limit=1] train.gap matches -2147483648..2147483647 run scoreboard players set #ok train_test 0
+	scoreboard players set @e[tag=tt.h,limit=1] train.halt 2
+	execute as @e[tag=tt.h,limit=1] at @s run function train:avoid/head
+	execute unless entity @e[tag=tt.h,scores={train.halt=2}] run scoreboard players set #ok train_test 0
+	execute if score @e[tag=tt.h,limit=1] train.gap matches -2147483648..2147483647 run scoreboard players set #ok train_test 0
+}
+
+# Head tt.h with two coupled followers, tt.f then tt.g. The follower kinds come from the caller through the summon lines of the tests
+function lib/couple_three {
+	execute as @e[tag=tt.h,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.h,limit=1] train.id
+	execute as @e[tag=tt.f,limit=1] run function train:link/apply
+	execute as @e[tag=tt.f,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.f,limit=1] train.id
+	execute as @e[tag=tt.g,limit=1] run function train:link/apply
+}
+
+# Spacing of h to f and f to g is about 2 blocks, and f is behind h and g behind f
+function lib/spacing_check {
+	execute store result score #hx train_test run data get entity @e[tag=tt.h,limit=1] Pos[0] <%UNIT%>
+	execute store result score #fx train_test run data get entity @e[tag=tt.f,limit=1] Pos[0] <%UNIT%>
+	execute store result score #gx train_test run data get entity @e[tag=tt.g,limit=1] Pos[0] <%UNIT%>
+	scoreboard players operation #d1 train_test = #hx train_test
+	scoreboard players operation #d1 train_test -= #fx train_test
+	scoreboard players operation #d2 train_test = #fx train_test
+	scoreboard players operation #d2 train_test -= #gx train_test
+	execute unless score #d1 train_test matches <%u(1.65)%>..<%u(2.35)%> run scoreboard players set #ok train_test 0
+	execute unless score #d2 train_test matches <%u(1.65)%>..<%u(2.35)%> run scoreboard players set #ok train_test 0
+}
+
+# t27 a head with two followers moving at speed brakes for a parked cart, the followers close up behind it one after the other and nothing
+# explodes or drops. Followers are plain minecarts here
+function t27/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/head
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~1 ~ ~ {Tags:["tt","tt.f"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~-1 ~ ~ {Tags:["tt","tt.g"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~30 ~ ~ {Tags:["tt","tt.x"]}
+	function train_test:lib/couple_three
+}
+function t27/check {
+	function train_test:lib/stopped_short
+	execute unless entity @e[tag=tt.f] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.g] run scoreboard players set #ok train_test 0
+	function train_test:lib/spacing_check
+}
+
+# t28 the same with a furnace as the follower, fueled and pushing, starting 0.6 behind its head inside the 1.15 scan radius. Two furnaces of
+# one train touching, then braking together, must not explode. Taking out the same-train rule does not fail this one, the follower never
+# closes at 0.1 per tick in real motion, t12 pins the rule with a hand set closing speed. This one guards the whole train settling
+function t28/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/head
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~2.4 ~ ~ {Tags:["tt","tt.f"],Fuel:3000s,PushX:1.0d,PushZ:0.0d}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~0.5 ~ ~ {Tags:["tt","tt.g"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~30 ~ ~ {Tags:["tt","tt.x"]}
+	function train_test:lib/couple_three
+}
+function t28/check {
+	function train_test:lib/stopped_short
+	execute unless entity @e[tag=tt.f] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.g] run scoreboard players set #ok train_test 0
+}
+#endregion
+
+#region Chunk claims
+# A coupled train claims the chunks its 15x15 squares touch, far from the arena so the claims are not the arena's own forced chunks. The
+# head at x 3012.5 and the follower at x 3010.5, z 3004.5, touch chunks 187 and 188 on both axes. The gametest pack forceloads chunk 188 187 itself,
+# see gt_tick in generate.js, so that one is already forced and never ours to free, the other three are. A derail frees all of ours and leaves the test's alone
+function chunk/start {
+	function train_test:lib/cleanup
+	kill @e[tag=tt.origin]
+	scoreboard players set #noavoid train.const 0
+	scoreboard players set #ok train_test 1
+	execute unless loaded 3010 64 3004 run scoreboard players set #ok train_test 0
+	execute positioned 3010.5 64 3004.5 run summon minecraft:marker ~ ~ ~ {Tags:["tt","tt.origin"]}
+	execute at @e[tag=tt.origin,limit=1] run fill ~-1 ~-1 ~ ~5 ~-1 ~ minecraft:stone
+	execute at @e[tag=tt.origin,limit=1] run fill ~-1 ~ ~ ~5 ~3 ~ minecraft:air
+	execute at @e[tag=tt.origin,limit=1] run fill ~-1 ~ ~ ~5 ~ ~ minecraft:rail[shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~2 ~ ~ {Tags:["tt","tt.h"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~ ~ ~ {Tags:["tt","tt.f"]}
+	execute as @e[tag=tt.h,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.h,limit=1] train.id
+	execute as @e[tag=tt.f,limit=1] run function train:link/apply
+}
+function chunk/claimed {
+	scoreboard players set #ok train_test 1
+	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3004
+	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3008
+	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3008
+	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3004
+	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+	# A chunk no square reaches is not claimed
+	execute in minecraft:overworld store success score #q train_test run forceload query 2976 3004
+	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+}
+function chunk/derail {
+	execute at @e[tag=tt.origin,limit=1] run setblock ~ ~ ~ minecraft:air
+}
+function chunk/released {
+	scoreboard players set #ok train_test 1
+	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3004
+	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3008
+	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3008
+	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3004
+	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+	function train_test:lib/cleanup
 }
 #endregion
 

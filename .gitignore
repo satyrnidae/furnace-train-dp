@@ -9,3 +9,7 @@ data/minecraft/tags/function
 docs/superpowers
 data/train_test/function
 .gametest
+
+# Second mcb project, the gametest functions
+gametest/mc/data
+gametest/mc/.mcb

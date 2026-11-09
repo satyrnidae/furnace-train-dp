@@ -1,4 +1,3 @@
-// TODO: Manual review needed. Please delete this line after review.
 // Runs every test instance headless against a fresh build. Steps: mcb build, generate the gametest pack, assemble a packs folder next to
 // the server jar, run net.minecraft.gametest.Main, print each result, exit with the number of failures.
 // Environment: GAMETEST_SERVER, a folder holding server.jar, default .gametest/server, see gametest/fetch-server.js.
@@ -25,13 +24,23 @@ if (!fs.existsSync(path.join(server, "server.jar"))) {
 	process.exit(-1);
 }
 // mcb exits 0 on a compile error and keeps the last good output, so the build output is read for it, a stale pack would pass or fail for the wrong reasons
-const build = spawnSync(process.execPath, [path.join(root, "node_modules", "mc-build", "dist", "mcb.js"), "build"], { cwd: root, encoding: "utf8" });
-process.stdout.write(build.stdout || "");
-process.stderr.write(build.stderr || "");
-if (build.status !== 0 || /(Compiler|Parser|Syntax) ?Error/i.test(`${build.stdout}${build.stderr}`)) {
-	console.error("build failed, not running tests");
+function build(cwd) {
+	const b = spawnSync(process.execPath, [path.join(root, "node_modules", "mc-build", "dist", "mcb.js"), "build"], { cwd, encoding: "utf8" });
+	process.stdout.write(b.stdout || "");
+	process.stderr.write(b.stderr || "");
+	if (b.status !== 0 || /(Compiler|Parser|Syntax) ?Error/i.test(`${b.stdout}${b.stderr}`)) {
+		console.error(`build failed in ${cwd}, not running tests`);
+		process.exit(-1);
+	}
+}
+// Two projects, the pack itself and the test functions in gametest/mc. The test namespace never builds into the pack's data folder, a zip of
+// that folder is the release. A leftover train_test there, from before the split or a stray build, fails the run
+if (fs.existsSync(path.join(root, "data", "train_test"))) {
+	console.error("data/train_test exists, the test namespace must not be built into the pack, delete it");
 	process.exit(-1);
 }
+build(root);
+build(path.join(root, "gametest", "mc"));
 const gametestPack = generate(root);
 
 const packs = path.join(server, "packs");

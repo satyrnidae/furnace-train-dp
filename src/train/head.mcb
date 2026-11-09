@@ -1,10 +1,10 @@
-import ../../scale.js
-
 # A head furnace on an unpowered powered rail coasts to the center of the rail block, stops there and holds. Powered again, it gets
 # its saved motion and push back. Fuel is never touched, it burns and can be topped up while stopped. Followers see a still leader and
 # stop with it, and a head at x.5 z.5 puts followers on block centers too.
 # train.halt is 0 running, 2 coasting to the rail center, 1 stopped, 3 yielding to a cart ahead, see avoid.mcb. Saved motion and push are
 # scores in ten thousandths.
+
+import ../../scale.js
 
 # As a head furnace that isn't a follower, at the head
 function rail {
@@ -127,6 +127,9 @@ function snap {
 	scoreboard players add #sz train.tmp <%UNIT / 2%>
 	execute store result entity @s Pos[0] double <%1 / UNIT%> run scoreboard players get #sx train.tmp
 	execute store result entity @s Pos[2] double <%1 / UNIT%> run scoreboard players get #sz train.tmp
+	# The move is the head's own, not a speed. The sampler would read it as velocity on its next tick, up to half a block
+	scoreboard players operation @s train.ppx = #sx train.tmp
+	scoreboard players operation @s train.ppz = #sz train.tmp
 	scoreboard players set @s train.halt 1
 	data merge entity @s {Motion:[0.0d,0.0d,0.0d],PushX:0.0d,PushZ:0.0d}
 }

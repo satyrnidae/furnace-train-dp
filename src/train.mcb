@@ -1,5 +1,3 @@
-import ../scale.js
-
 # Furnace minecart trains. Couple carts with a chain, cut them with shears, and a train follows its head with a chain block between
 # each pair. A head furnace refuels from coal in a chest cart behind it, stops on unpowered powered rails and keeps the chunks around
 # the train forceloaded.
@@ -9,6 +7,8 @@ import ../scale.js
 # Units: positions, gaps and speeds are scores in units of 1/64 block, see scale.js, saved motion and push are in ten thousandths.
 # Tags, the sneaking predicate and the take_one item modifier are plain JSON under data/train. The couplers tag has optional entries
 # that mcb tags can't express.
+
+import ../scale.js
 
 #region Setup
 function load minecraft:load {
@@ -30,6 +30,9 @@ function load minecraft:load {
 	scoreboard objectives add train.ppz dummy
 	scoreboard objectives add train.svx dummy
 	scoreboard objectives add train.svz dummy
+	# The velocity of the tick before, the crash check reads both, see crash.mcb
+	scoreboard objectives add train.pvx dummy
+	scoreboard objectives add train.pvz dummy
 	scoreboard objectives add train.dir dummy
 	scoreboard objectives add train.gap dummy
 	scoreboard objectives add train.chk dummy

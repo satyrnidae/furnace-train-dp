@@ -1,4 +1,3 @@
-// TODO: Manual review needed. Please delete this line after review.
 // Writes the gametest data pack into .gametest/pack: one structure, environment and test instance per entry of tests.js.
 // The structure is a binary NBT file, written here by hand because a data pack can't ship it as text. Key names are the 26.x ones, id
 // in place of Name and lowercase properties, and DataVersion is 5023 for 26.3.
@@ -54,13 +53,21 @@ function generate(root) {
 	fs.rmSync(out, { recursive: true, force: true });
 	const data = path.join(out, "data", "train_test");
 	for (const d of ["structure", "test_environment", "test_instance"]) fs.mkdirSync(path.join(data, d), { recursive: true });
+	// The scenario functions, built by mcb from gametest/mc, see run.js. Copied first, the files written below sit beside them
+	const built = path.join(root, "gametest", "mc", "data");
+	if (!fs.existsSync(path.join(built, "train_test", "function"))) throw new Error("gametest/mc has not been built, run gametest/run.js");
+	fs.cpSync(built, path.join(out, "data"), { recursive: true });
 	// Runs every tick of the test server and never in a real world, this pack is only loaded by gametest/run.js. Keeps the arena chunks of
-	// every scenario forceloaded, they are at 100 64 100 and far from the structures, and counts the global clock the test windows use
-	// once the far corner of the arena is loaded. lib/ref clones to z up to 100 + 24
+	// every scenario forceloaded, they are at 100 64 100 and far from the structures, and counts the global clock the test windows use. Chunks
+	// load in real time and the headless server ticks much faster than it generates, so the clock waits for all of them, the arena, the one
+	// chunk of the chunk claim test at 3008 3004 and the far arena of the 25 million test, a window never starts before its chunks are there.
+	// lib/ref clones to z up to 100 + 24
 	fs.mkdirSync(path.join(data, "function"), { recursive: true });
 	fs.writeFileSync(path.join(data, "function", "gt_tick.mcfunction"), [
 		"execute unless loaded 100 64 100 run forceload add 90 90 160 130",
-		"execute if loaded 100 64 100 if loaded 160 64 130 run scoreboard players add #clock train_test 1",
+		"execute unless loaded 3010 64 3004 run forceload add 3008 3004",
+		"execute unless loaded 25000000 64 100 run forceload add 24999990 90 25000060 130",
+		"execute if loaded 100 64 100 if loaded 160 64 130 if loaded 3010 64 3004 if loaded 25000000 64 100 if loaded 25000060 64 130 run scoreboard players add #clock train_test 1",
 		"",
 	].join("\n"));
 	fs.mkdirSync(path.join(out, "data", "minecraft", "tags", "function"), { recursive: true });

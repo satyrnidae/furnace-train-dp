@@ -1,9 +1,9 @@
-import ../../scale.js
-
 # Furnace cart sampler. Every tick each furnace cart stores its position and the change since last tick as its velocity, in units
 # of a block per tick. A head also keeps its last heading. Crash detection reads these for every furnace cart, braking reads them for heads.
 # A cart that has just spawned has no previous position, it is initialized to the current one so its first velocity is 0.
 # A move of more than 0.45 blocks in a tick is a teleport, nothing real goes that fast, and reads as 0.
+
+import ../../scale.js
 
 # Runs first in train:tick
 function tick {
@@ -29,6 +29,12 @@ function cart {
 	execute if score #vz train.tmp matches ..-<%u(0.45) + 1%> run scoreboard players set #tp train.tmp 1
 	execute if score #tp train.tmp matches 1 run scoreboard players set #vx train.tmp 0
 	execute if score #tp train.tmp matches 1 run scoreboard players set #vz train.tmp 0
+	# Last tick's velocity is kept, vanilla's push cuts two touching carts to a fifth of their motion and the crash check wants the speed before
+	scoreboard players operation @s train.pvx = @s train.svx
+	scoreboard players operation @s train.pvz = @s train.svz
+	# A teleport has no earlier velocity either, a cart dropped next to another one is not a hit that tick
+	execute if score #tp train.tmp matches 1 run scoreboard players set @s train.pvx 0
+	execute if score #tp train.tmp matches 1 run scoreboard players set @s train.pvz 0
 	scoreboard players operation @s train.svx = #vx train.tmp
 	scoreboard players operation @s train.svz = #vz train.tmp
 

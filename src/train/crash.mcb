@@ -1,10 +1,10 @@
-import ../../scale.js
-
 # Furnace crashes. Every tick each furnace cart looks for another furnace cart within 1.15 blocks. If the two are in different trains and
 # closing on each other at 0.1 blocks per tick or more, both explode: effects, a small damage to what stands near, and both carts are
 # destroyed so they drop as items. Nothing here touches a block, no real explosion is created.
-# Velocities are the sampler's, see sample.mcb. A cart that has just spawned or been teleported reads 0, so it can't start one.
+# Velocities are the sampler's, see sample.mcb, this tick's and last tick's, the faster closing of the two counts. A cart that has just spawned or been teleported reads 0, so it can't start one.
 # Braking should stop nearly every collision first, this is for blind spots like a tight curve, a derailed cart or a boosted one.
+
+import ../../scale.js
 
 # Called from train:tick right after the sampler
 function tick {
@@ -37,6 +37,20 @@ function pair {
 	scoreboard players operation #t train.tmp = #dvz train.tmp
 	scoreboard players operation #t train.tmp *= #dvz train.tmp
 	scoreboard players operation #rs train.tmp += #t train.tmp
+	# The same for last tick's velocities, and the faster of the two closings is the one used from here on. Within about 1.18 blocks vanilla's
+	# push has already cut both carts to a fifth, so this tick's velocities can read a hard hit as a gentle one
+	scoreboard players operation #qx train.tmp = @e[tag=train.me,limit=1] train.pvx
+	scoreboard players operation #qx train.tmp -= @s train.pvx
+	scoreboard players operation #qz train.tmp = @e[tag=train.me,limit=1] train.pvz
+	scoreboard players operation #qz train.tmp -= @s train.pvz
+	scoreboard players operation #rq train.tmp = #qx train.tmp
+	scoreboard players operation #rq train.tmp *= #qx train.tmp
+	scoreboard players operation #t train.tmp = #qz train.tmp
+	scoreboard players operation #t train.tmp *= #qz train.tmp
+	scoreboard players operation #rq train.tmp += #t train.tmp
+	execute if score #rq train.tmp > #rs train.tmp run scoreboard players operation #dvx train.tmp = #qx train.tmp
+	execute if score #rq train.tmp > #rs train.tmp run scoreboard players operation #dvz train.tmp = #qz train.tmp
+	execute if score #rq train.tmp > #rs train.tmp run scoreboard players operation #rs train.tmp = #rq train.tmp
 	scoreboard players operation #h2 train.tmp = #hit train.const
 	scoreboard players operation #h2 train.tmp *= #hit train.const
 	execute if score #rs train.tmp < #h2 train.tmp run return 0

@@ -43,6 +43,16 @@ const gametest = {
 		{ id: "t18_reverse_yield", steps: [[1, "t18/start"], [121, "t18/reverse"], [136, "t18/check"]] },
 		{ id: "t19_far_coordinates", steps: [[1, "far/prep"], [80, "far/start"], [280, "far/check"]] },
 		{ id: "t20_follow_spacing", steps: [[1, "t20/start"], [101, "t20/check"]] },
+		{ id: "t21_sibling_followers", steps: [[1, "t21/run"]] },
+		{ id: "t22_snap_velocity", steps: [[1, "t22/run"]] },
+		{ id: "t23_gap_aging", steps: [[1, "t23/run"]] },
+		{ id: "t24_slowed_hit", steps: [[1, "t24/run"]] },
+		{ id: "t24_slowed_parallel", steps: [[1, "t24/parallel"]] },
+		{ id: "t25_rail_beats_yield", steps: [[1, "t25/start"], [150, "t25/at_rail"], [151, "t25/power"], [450, "t25/check"]] },
+		{ id: "t26_avoid_skips_halted", steps: [[1, "t26/run"]] },
+		{ id: "t27_brake_with_followers", steps: [[1, "t27/start"], [401, "t27/check"]] },
+		{ id: "t28_furnace_follower", steps: [[1, "t28/start"], [401, "t28/check"]] },
+		{ id: "t29_chunk_claims", steps: [[1, "chunk/start"], [60, "chunk/claimed"], [61, "chunk/derail"], [90, "chunk/released"]] },
 	],
 };
 
