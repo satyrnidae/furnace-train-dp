@@ -1,0 +1,68 @@
+# TODO: Manual review needed. Please delete this line after review.
+# Look-ahead braking. A head, meaning a furnace cart that isn't a follower, traces the rail ahead once every #period ticks, slot picked by
+# its id so heads spread across the period, and remembers the path distance to the first foreign cart as train.gap. Every tick between
+# traces the gap is aged by the distance the head travelled, and a speed cap comes from it:
+#   cap = (gap - #stop) / #10, thousandths of a block per tick, never below 0
+# At 0.2 blocks per tick a head starts slowing about 4.5 blocks out and stops about 2.5 blocks short. Followers are not touched, they hold
+# their spacing and stop with the head. An unpowered powered rail, halt 1 or 2, takes priority and this skips such a head.
+# train.halt 3 is yielding, see head.mcb. The speed cap has to be under 0.2, a head tops out there, before it counts as blocked.
+
+# Called from train:tick right after the sampler, before head/rail
+function tick {
+	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower] at @s run function train:avoid/head
+}
+
+# As a head, at it
+function head {
+	execute if score #noavoid train.const matches 1 run return 0
+	execute if score @s train.halt matches 1..2 run return 0
+	# No heading yet, so no direction to look along. A head parked at a station learns it the first time it moves
+	execute unless score @s train.dir = @s train.dir run return 0
+	execute unless score @s train.id = @s train.id run function train:link/assign_id
+	execute unless score @s train.gap = @s train.gap run scoreboard players set @s train.gap 99000
+
+	scoreboard players operation #slot train.tmp = @s train.id
+	scoreboard players operation #slot train.tmp += #gen train.tmp
+	scoreboard players operation #slot train.tmp %= #period train.const
+	execute if score #slot train.tmp matches 0 run function train:avoid/trace
+	execute unless score #slot train.tmp matches 0 run function train:avoid/age
+
+	scoreboard players operation #cap train.tmp = @s train.gap
+	scoreboard players operation #cap train.tmp -= #stop train.const
+	scoreboard players operation #cap train.tmp /= #10 train.const
+	execute if score #cap train.tmp matches ..-1 run scoreboard players set #cap train.tmp 0
+	execute if score @s train.halt matches 3 if score #cap train.tmp matches 200.. run return run function train:head/resume
+	execute if score @s train.halt matches 3 run return run function train:head/yield
+	execute if score #cap train.tmp matches ..199 run function train:avoid/enter
+}
+
+# As a head. Runs the trace and keeps the answer, with the tick it was taken
+function trace {
+	function train:trace/run
+	scoreboard players operation @s train.gap = #gap train.tmp
+	scoreboard players operation @s train.chk = #gen train.tmp
+}
+
+# As a head, between traces. The gap shrinks by the distance travelled, the larger axis of the velocity plus 0.4 of the smaller, never below 0
+function age {
+	scoreboard players operation #ax train.tmp = @s train.svx
+	execute if score #ax train.tmp matches ..-1 run scoreboard players operation #ax train.tmp *= #-1 train.const
+	scoreboard players operation #az train.tmp = @s train.svz
+	execute if score #az train.tmp matches ..-1 run scoreboard players operation #az train.tmp *= #-1 train.const
+	scoreboard players operation #big train.tmp = #ax train.tmp
+	scoreboard players operation #big train.tmp > #az train.tmp
+	scoreboard players operation #small train.tmp = #ax train.tmp
+	scoreboard players operation #small train.tmp < #az train.tmp
+	scoreboard players operation #small train.tmp *= #2 train.const
+	scoreboard players operation #small train.tmp *= #2 train.const
+	scoreboard players operation #small train.tmp /= #10 train.const
+	scoreboard players operation #big train.tmp += #small train.tmp
+	scoreboard players operation @s train.gap -= #big train.tmp
+	execute if score @s train.gap matches ..-1 run scoreboard players set @s train.gap 0
+}
+
+# As a head with halt 0 and a cap under 0.2. Saved motion and push are the values head/track recorded on the last running tick
+function enter {
+	scoreboard players set @s train.halt 3
+	function train:head/yield
+}

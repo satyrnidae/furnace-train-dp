@@ -34,6 +34,198 @@ function lib/report {
 }
 #endregion
 
+#region Task 4 avoid
+# 45 east-west rails from the origin
+function lib/strip {
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~ ~ ~44 ~ ~ minecraft:rail[shape=east_west]
+}
+
+# Fueled head, pushing east, on the strip at x 3
+function lib/head {
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~3 ~ ~ {Tags:["tt","tt.h"],Fuel:3000s,PushX:1.0d,PushZ:0.0d}
+}
+
+# Asserts for a head tt.h that should be yielding in front of a parked cart tt.x: still alive, halt 3, speed under 0.01, at least 2.0
+# blocks of path between them, nothing blown up. Distance is manhattan so it also holds on a curve
+function lib/stopped_short {
+	scoreboard players set #ok train_test 1
+	execute unless entity @e[tag=tt.h] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.halt=3,train.svx=-10..10,train.svz=-10..10}] run scoreboard players set #ok train_test 0
+	execute store result score #hx train_test run data get entity @e[tag=tt.h,limit=1] Pos[0] 1000
+	execute store result score #hz train_test run data get entity @e[tag=tt.h,limit=1] Pos[2] 1000
+	execute store result score #px train_test run data get entity @e[tag=tt.x,limit=1] Pos[0] 1000
+	execute store result score #pz train_test run data get entity @e[tag=tt.x,limit=1] Pos[2] 1000
+	scoreboard players operation #dx train_test = #px train_test
+	scoreboard players operation #dx train_test -= #hx train_test
+	execute if score #dx train_test matches ..-1 run scoreboard players operation #dx train_test *= #-1 train.const
+	scoreboard players operation #dz train_test = #pz train_test
+	scoreboard players operation #dz train_test -= #hz train_test
+	execute if score #dz train_test matches ..-1 run scoreboard players operation #dz train_test *= #-1 train.const
+	scoreboard players operation #dx train_test += #dz train_test
+	execute unless score #dx train_test matches 2000.. run scoreboard players set #ok train_test 0
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #ok train_test 0
+}
+
+# t2 a head stops short of a lone parked cart
+function t2/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/head
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~30 ~ ~ {Tags:["tt","tt.x"]}
+	schedule function train_test:t2/check 400t
+}
+function t2/check {
+	function train_test:lib/stopped_short
+	data modify storage train_test:cur name set value "t2 head stops short of a parked cart"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+
+# t3 same in front of a parked coupled train, the station case. The three carts are coupled through the real link code
+function t3/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/head
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~30 ~ ~ {Tags:["tt","tt.x"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~32 ~ ~ {Tags:["tt","tt.y"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~34 ~ ~ {Tags:["tt","tt.z"]}
+	execute as @e[tag=tt.x,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.x,limit=1] train.id
+	execute as @e[tag=tt.y,limit=1] run function train:link/apply
+	execute as @e[tag=tt.y,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.y,limit=1] train.id
+	execute as @e[tag=tt.z,limit=1] run function train:link/apply
+	schedule function train_test:t3/check 400t
+}
+function t3/check {
+	function train_test:lib/stopped_short
+	data modify storage train_test:cur name set value "t3 head stops short of a parked coupled train"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+
+# t4 the cart in front leaves, the head leaves state 3 and gets its speed back
+function t4/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/head
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~30 ~ ~ {Tags:["tt","tt.x"]}
+	schedule function train_test:t4/pop 300t
+	schedule function train_test:t4/check 420t
+}
+function t4/pop {
+	kill @e[tag=tt.x]
+}
+function t4/check {
+	scoreboard players set #ok train_test 1
+	execute unless entity @e[tag=tt.h,scores={train.halt=0,train.svx=100..}] run scoreboard players set #ok train_test 0
+	data modify storage train_test:cur name set value "t4 head resumes when the way clears"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+
+# t5 two heads with ids 7 apart trace on different ticks
+function t5/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~ ~ ~-2 {Tags:["tt","tt.a"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~ ~ ~2 {Tags:["tt","tt.b"]}
+	scoreboard players set @e[tag=tt.a,limit=1] train.id 100
+	scoreboard players set @e[tag=tt.b,limit=1] train.id 107
+	scoreboard players set @e[tag=tt.a] train.dir 1
+	scoreboard players set @e[tag=tt.b] train.dir 1
+	schedule function train_test:t5/check 45t
+}
+function t5/check {
+	scoreboard players set #ok train_test 1
+	execute unless entity @e[tag=tt.a,scores={train.chk=1..}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.b,scores={train.chk=1..}] run scoreboard players set #ok train_test 0
+	scoreboard players operation #a train_test = @e[tag=tt.a,limit=1] train.chk
+	scoreboard players operation #a train_test %= #period train.const
+	scoreboard players operation #b train_test = @e[tag=tt.b,limit=1] train.chk
+	scoreboard players operation #b train_test %= #period train.const
+	execute if score #a train_test = #b train_test run scoreboard players set #ok train_test 0
+	data modify storage train_test:cur name set value "t5 heads trace on different ticks"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+
+# t6 a head with no heading yet does not trace and does not yield, even with a cart 2 blocks ahead
+function t6/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~3 ~ ~ {Tags:["tt","tt.h"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~5 ~ ~ {Tags:["tt","tt.x"]}
+	schedule function train_test:t6/check 60t
+}
+function t6/check {
+	scoreboard players set #ok train_test 1
+	execute if entity @e[tag=tt.h,scores={train.halt=3}] run scoreboard players set #ok train_test 0
+	execute if score @e[tag=tt.h,limit=1] train.gap matches -2147483648..2147483647 run scoreboard players set #ok train_test 0
+	data modify storage train_test:cur name set value "t6 head without a heading does nothing"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+
+# t7 a foreign cart in the head's own block is gap 0, the head holds, no division by zero. One tick, no movement
+function t7/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~3 ~ ~ {Tags:["tt","tt.h"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~3 ~ ~ {Tags:["tt","tt.x"]}
+	scoreboard players set @e[tag=tt.h,limit=1] train.dir 1
+	execute as @e[tag=tt.h,limit=1] run function train:avoid/trace
+	execute as @e[tag=tt.h,limit=1] run function train:avoid/head
+	scoreboard players set #ok train_test 1
+	execute unless entity @e[tag=tt.h,scores={train.halt=3,train.gap=0}] run scoreboard players set #ok train_test 0
+	data modify storage train_test:cur name set value "t7 foreign cart in the head's own block"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+
+# t8 the same stop on a curve. East along 11 rails, a curve south, then south, the parked cart at the end
+function t8/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~ ~ ~10 ~ ~ minecraft:rail[shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run setblock ~11 ~ ~ minecraft:rail[shape=south_west]
+	execute at @e[tag=tt.origin,limit=1] run fill ~11 ~ ~1 ~11 ~ ~3 minecraft:rail[shape=north_south]
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~1 ~ ~ {Tags:["tt","tt.h"],Fuel:3000s,PushX:1.0d,PushZ:0.0d}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~11 ~ ~3 {Tags:["tt","tt.x"]}
+	schedule function train_test:t8/check 500t
+}
+function t8/check {
+	function train_test:lib/stopped_short
+	data modify storage train_test:cur name set value "t8 head stops short around a curve"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+
+# t9 the same stop up a slope, the parked cart on the rails one level up
+function t9/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~ ~ ~9 ~ ~ minecraft:rail[shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run setblock ~10 ~ ~ minecraft:rail[shape=ascending_east]
+	execute at @e[tag=tt.origin,limit=1] run fill ~11 ~ ~ ~22 ~ ~ minecraft:stone
+	execute at @e[tag=tt.origin,limit=1] run fill ~11 ~1 ~ ~22 ~1 ~ minecraft:rail[shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~1 ~ ~ {Tags:["tt","tt.h"],Fuel:3000s,PushX:1.0d,PushZ:0.0d}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~22 ~1 ~ {Tags:["tt","tt.x"]}
+	schedule function train_test:t9/check 500t
+}
+function t9/check {
+	function train_test:lib/stopped_short
+	data modify storage train_test:cur name set value "t9 head stops short up a slope"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+#endregion
+
 #region Task 3 tracer
 # Expected exits for every valid shape and heading pair, written out by hand from the rail edges and not derived from the tracer's own table.
 # Fields: shape, heading, exit heading, 1 when the exit is the high edge of a slope. Each case puts a foreign cart one block beyond, so the gap is 1000.

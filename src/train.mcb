@@ -63,6 +63,8 @@ function load minecraft:load {
 function tick minecraft:tick {
 	# Velocities of every furnace cart, first so everything below sees this tick's
 	function train:sample/tick
+	# Look-ahead braking for heads, before head/rail so an unpowered rail still wins
+	function train:avoid/tick
 
 	# Clicks stored on the click catchers. Left clicks are swallowed while armed, the data is dropped so it doesn't pile up
 	execute as @e[type=minecraft:interaction,tag=train.hit] at @s if data entity @s interaction run function train:click/hit
