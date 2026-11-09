@@ -63,6 +63,8 @@ function load minecraft:load {
 function tick minecraft:tick {
 	# Velocities of every furnace cart, first so everything below sees this tick's
 	function train:sample/tick
+	# Two furnaces of different trains meeting hard explode, after the sampler so velocities are this tick's
+	function train:crash/tick
 	# Look-ahead braking for heads, before head/rail so an unpowered rail still wins
 	function train:avoid/tick
 

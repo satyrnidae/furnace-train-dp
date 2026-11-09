@@ -34,6 +34,133 @@ function lib/report {
 }
 #endregion
 
+#region Task 5 crash
+# Snapshot of the stage blocks 20 blocks south, to prove an explosion changed none
+function lib/ref {
+	execute at @e[tag=tt.origin,limit=1] run clone ~-1 ~-1 ~-4 ~46 ~4 ~4 ~-1 ~-1 ~16
+}
+
+# Sets #ok train_test to 0 unless the stage still equals the snapshot
+function lib/ref_check {
+	execute at @e[tag=tt.origin,limit=1] unless blocks ~-1 ~-1 ~-4 ~46 ~4 ~4 ~-1 ~-1 ~16 all run scoreboard players set #ok train_test 0
+}
+
+# t10 a real head-on, braking off. Two fueled furnaces meet in the middle
+function t10/start {
+	function train_test:lib/begin
+	scoreboard players set #noavoid train.const 1
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/ref
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~5 ~ ~ {Tags:["tt","tt.a"],Fuel:3000s,PushX:1.0d,PushZ:0.0d}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~25 ~ ~ {Tags:["tt","tt.b"],Fuel:3000s,PushX:-1.0d,PushZ:0.0d}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:pig ~15 ~ ~2 {Tags:["tt","tt.near"],NoAI:1b}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:pig ~15 ~ ~-3.9 {Tags:["tt","tt.far"],NoAI:1b}
+	schedule function train_test:t10/check 300t
+}
+function t10/check {
+	scoreboard players set #ok train_test 1
+	execute if entity @e[type=minecraft:furnace_minecart,tag=tt] run scoreboard players set #ok train_test 0
+	execute store result score #n train_test at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:furnace_minecart"}},distance=..64]
+	execute unless score #n train_test matches 2 run scoreboard players set #ok train_test 0
+	execute if entity @e[tag=tt.near,nbt={Health:10.0f}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.near] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.far,nbt={Health:10.0f}] run scoreboard players set #ok train_test 0
+	function train_test:lib/ref_check
+	data modify storage train_test:cur name set value "t10 head-on explodes both, drops two items, hurts near not far, no blocks"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+
+# t11 a touch below 0.1 blocks per tick just bumps
+function t11/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10 ~ ~ {Tags:["tt","tt.a"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~12 ~ ~ {Tags:["tt","tt.b"],Motion:[-0.05d,0d,0d]}
+	schedule function train_test:t11/check 60t
+}
+function t11/check {
+	scoreboard players set #ok train_test 1
+	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+	data modify storage train_test:cur name set value "t11 slow contact does not explode"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+
+# t12 two furnaces of one train in a hard closing contact do not explode. Velocities are set by hand so only the train rule is under test
+function t12/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10 ~ ~ {Tags:["tt","tt.a"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~11 ~ ~ {Tags:["tt","tt.b"]}
+	execute as @e[tag=tt.a,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.a,limit=1] train.id
+	execute as @e[tag=tt.b,limit=1] run function train:link/apply
+	function train_test:lib/hard_closing
+	function train:crash/tick
+	scoreboard players set #ok train_test 1
+	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+	data modify storage train_test:cur name set value "t12 same train furnaces do not explode"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+
+# Positions into the sampler scores and a closing speed of 0.6 between tt.a and tt.b, a moving right and b moving left
+function lib/hard_closing {
+	execute store result score @e[tag=tt.a,limit=1] train.ppx run data get entity @e[tag=tt.a,limit=1] Pos[0] 1000
+	execute store result score @e[tag=tt.a,limit=1] train.ppz run data get entity @e[tag=tt.a,limit=1] Pos[2] 1000
+	execute store result score @e[tag=tt.b,limit=1] train.ppx run data get entity @e[tag=tt.b,limit=1] Pos[0] 1000
+	execute store result score @e[tag=tt.b,limit=1] train.ppz run data get entity @e[tag=tt.b,limit=1] Pos[2] 1000
+	scoreboard players set @e[tag=tt.a,limit=1] train.svx 300
+	scoreboard players set @e[tag=tt.a,limit=1] train.svz 0
+	scoreboard players set @e[tag=tt.b,limit=1] train.svx -300
+	scoreboard players set @e[tag=tt.b,limit=1] train.svz 0
+}
+
+# t13 two furnaces that spawn 0.9 blocks apart are not a hit, a new cart has no velocity yet
+function t13/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10 ~ ~ {Tags:["tt","tt.a"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10.9 ~ ~ {Tags:["tt","tt.b"]}
+	schedule function train_test:t13/check 5t
+}
+function t13/check {
+	scoreboard players set #ok train_test 1
+	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+	data modify storage train_test:cur name set value "t13 freshly spawned furnaces do not explode"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+
+# t14 different trains in a hard closing contact explode, and a coupled cart standing 2 blocks from the impact is untouched
+function t14/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10 ~ ~ {Tags:["tt","tt.a"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~11 ~ ~ {Tags:["tt","tt.b"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~12 ~ ~ {Tags:["tt","tt.f"]}
+	execute as @e[tag=tt.b,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.b,limit=1] train.id
+	execute as @e[tag=tt.f,limit=1] run function train:link/apply
+	function train_test:lib/hard_closing
+	function train:crash/tick
+	scoreboard players set #ok train_test 1
+	execute if entity @e[type=minecraft:furnace_minecart,tag=tt] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f] run scoreboard players set #ok train_test 0
+	execute store result score #n train_test at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:furnace_minecart"}},distance=..64]
+	execute unless score #n train_test matches 2 run scoreboard players set #ok train_test 0
+	data modify storage train_test:cur name set value "t14 different trains explode, a coupled cart nearby survives"
+	function train_test:lib/report with storage train_test:cur
+	function train_test:lib/cleanup
+}
+#endregion
+
 #region Task 4 avoid
 # 45 east-west rails from the origin
 function lib/strip {

@@ -1,0 +1,73 @@
+# TODO: Manual review needed. Please delete this line after review.
+# Furnace crashes. Every tick each furnace cart looks for another furnace cart within 1.15 blocks. If the two are in different trains and
+# closing on each other at 0.1 blocks per tick or more, both explode: effects, a small damage to what stands near, and both carts are
+# destroyed so they drop as items. Nothing here touches a block, no real explosion is created.
+# Velocities are the sampler's, see sample.mcb. A cart that has just spawned or been teleported reads 0, so it can't start one.
+# Braking should stop nearly every collision first, this is for blind spots like a tight curve, a derailed cart or a boosted one.
+
+# Called from train:tick right after the sampler
+function tick {
+	execute as @e[type=minecraft:furnace_minecart,tag=!train.boom] at @s run function train:crash/scan
+}
+
+# As a furnace cart, at it. Marks itself so the others can find it
+function scan {
+	tag @s add train.me
+	execute as @e[type=minecraft:furnace_minecart,distance=..1.15,tag=!train.me,tag=!train.boom] run function train:crash/pair
+	tag @s remove train.me
+}
+
+# As the other furnace cart, the scanner is tagged train.me. An earlier pair may have destroyed the scanner already
+function pair {
+	execute unless entity @e[tag=train.me,limit=1] run return 0
+	# Different trains only
+	execute as @e[tag=train.me,limit=1] run function train:sample/root_of
+	scoreboard players operation #ra train.tmp = #root train.tmp
+	function train:sample/root_of
+	execute if score #root train.tmp = #ra train.tmp run return 0
+
+	# Relative velocity of the scanner against this cart, speed squared against #hit squared
+	scoreboard players operation #dvx train.tmp = @e[tag=train.me,limit=1] train.svx
+	scoreboard players operation #dvx train.tmp -= @s train.svx
+	scoreboard players operation #dvz train.tmp = @e[tag=train.me,limit=1] train.svz
+	scoreboard players operation #dvz train.tmp -= @s train.svz
+	scoreboard players operation #rs train.tmp = #dvx train.tmp
+	scoreboard players operation #rs train.tmp *= #dvx train.tmp
+	scoreboard players operation #t train.tmp = #dvz train.tmp
+	scoreboard players operation #t train.tmp *= #dvz train.tmp
+	scoreboard players operation #rs train.tmp += #t train.tmp
+	scoreboard players operation #h2 train.tmp = #hit train.const
+	scoreboard players operation #h2 train.tmp *= #hit train.const
+	execute if score #rs train.tmp < #h2 train.tmp run return 0
+
+	# Closing, the relative velocity points from the scanner toward this cart. Positions are the sampler's, this tick's
+	scoreboard players operation #dpx train.tmp = @s train.ppx
+	scoreboard players operation #dpx train.tmp -= @e[tag=train.me,limit=1] train.ppx
+	scoreboard players operation #dpz train.tmp = @s train.ppz
+	scoreboard players operation #dpz train.tmp -= @e[tag=train.me,limit=1] train.ppz
+	scoreboard players operation #dot train.tmp = #dvx train.tmp
+	scoreboard players operation #dot train.tmp *= #dpx train.tmp
+	scoreboard players operation #t train.tmp = #dvz train.tmp
+	scoreboard players operation #t train.tmp *= #dpz train.tmp
+	scoreboard players operation #dot train.tmp += #t train.tmp
+	execute unless score #dot train.tmp matches 1.. run return 0
+
+	tag @s add train.boom
+	execute as @e[tag=train.me,limit=1] at @s run function train:crash/boom
+}
+
+# As the scanner, at it, this cart is already tagged train.boom. Effects at both carts, one damage at the scanner, then both carts pop.
+# A minecart is destroyed by more than 5 damage, drops its item and lets its riders go. The damage skips carts, items, boats, hanging
+# entities and the helper entities the tests and this pack use, so it hurts living things only and takes nothing else apart
+function boom {
+	tag @s add train.boom
+	execute as @e[type=minecraft:furnace_minecart,tag=train.boom] at @s run function train:crash/fx
+	execute as @e[distance=..3,type=!#train:carts,type=!minecraft:item,type=!minecraft:interaction,type=!minecraft:marker,type=!minecraft:item_display,type=!minecraft:block_display,type=!minecraft:text_display,type=!#minecraft:boat,type=!minecraft:painting,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:leash_knot] run damage @s 6 minecraft:explosion
+	execute as @e[type=minecraft:furnace_minecart,tag=train.boom] run damage @s 1000 minecraft:explosion
+}
+
+# As an exploding cart, at it
+function fx {
+	particle minecraft:explosion ~ ~0.5 ~ 0.2 0.2 0.2 0 3
+	playsound minecraft:entity.generic.explode block @a ~ ~ ~ 1 1.2
+}
