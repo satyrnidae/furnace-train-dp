@@ -46,6 +46,7 @@ function apply {
 	function train:chain/kill
 	scoreboard players operation @s train.prev = #lead train.tmp
 	scoreboard players set @s train.len <%u(2)%>
+	scoreboard players set @s train.strain 0
 	tag @s add train.follower
 	scoreboard players set #ok train.tmp 1
 }
@@ -54,11 +55,14 @@ function apply {
 function uncouple {
 	scoreboard players reset @s train.sel
 	scoreboard players set #cut train.tmp 0
+	# A creative player's cut gives no chain back, whoever made the link. Every other way a link breaks does
+	execute if entity @s[gamemode=creative] run scoreboard players set #nodrop train.tmp 1
 	# A clicked follower is cut from the cart ahead
 	execute as @e[tag=train.target,tag=train.follower,limit=1] run function train:link/unlink
 	# Otherwise whatever follows the clicked cart is cut
 	execute if score #cut train.tmp matches 0 run scoreboard players operation #cid train.tmp = @e[tag=train.target,limit=1] train.id
 	execute if score #cut train.tmp matches 0 as @e[type=#train:carts,tag=train.follower] if score @s train.prev = #cid train.tmp run function train:link/unlink
+	scoreboard players set #nodrop train.tmp 0
 	tag @e[tag=train.target] remove train.target
 	execute if score #cut train.tmp matches 1 run title @s actionbar {text:"Uncoupled"}
 	execute if score #cut train.tmp matches 0 run title @s actionbar {text:"Nothing to uncouple"}
@@ -70,6 +74,7 @@ function unlink {
 	function train:chain/kill
 	tag @s remove train.follower
 	scoreboard players reset @s train.prev
+	scoreboard players reset @s train.strain
 }
 
 # As a cart with no id yet

@@ -1081,6 +1081,72 @@ function chunk/released {
 }
 #endregion
 
+#region Chain breaking
+# Macro, id. A chain display for the follower tt.f as chain/spawn makes it, tagged and scored like the real one, of the block in id
+function lib/chain_display {
+	execute at @e[tag=tt.f,limit=1] run summon minecraft:block_display ~ ~0.4 ~ {Tags:["tt","tt.d","train.chain"],teleport_duration:1,interpolation_duration:1}
+	scoreboard players operation @e[tag=tt.d,limit=1] train.id = @e[tag=tt.f,limit=1] train.id
+	$data modify entity @e[tag=tt.d,limit=1] block_state set value "$(id)"
+}
+
+# Follower tt.f on the strip at x 3 coupled to a parked minecart tt.h at x 9, 6 blocks away, with a copper chain between them.
+# A copper chain and not an iron one, a drop that is always iron would pass otherwise
+function lib/far_pair {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~3 ~ ~ {Tags:["tt","tt.f"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~9 ~ ~ {Tags:["tt","tt.h"]}
+	execute as @e[tag=tt.h,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.h,limit=1] train.id
+	execute as @e[tag=tt.f,limit=1] run function train:link/apply
+	execute as @e[tag=tt.f,limit=1] run function train:link/assign_id
+	function train_test:lib/chain_display {id:"minecraft:copper_chain"}
+}
+
+# t30 a follower that can't close a 6 block gap loses the chain. Stone on the strip at x 4 stops it, the head is parked past it. The gap is
+# over 5 blocks every tick, and the chain holds for the first ticks and then breaks and drops a copper chain, not an iron one
+function t30/start {
+	function train_test:lib/far_pair
+	execute at @e[tag=tt.origin,limit=1] run setblock ~4 ~ ~ minecraft:stone
+}
+function t30/still {
+	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
+}
+function t30/check {
+	execute if entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute if entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
+	execute at @e[tag=tt.origin,limit=1] unless entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:copper_chain"}}] run scoreboard players set #ok train_test 0
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:iron_chain"}}] run scoreboard players set #ok train_test 0
+}
+
+# t31 a gap that is over 5 blocks for only a moment does not break the chain. The same pair on open track, the follower closes the 6 blocks
+# at 0.45 a tick and is under 5 well inside the 5 ticks
+function t31/start {
+	function train_test:lib/far_pair
+}
+function t31/check {
+	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:copper_chain"}}] run scoreboard players set #ok train_test 0
+}
+
+# t32 a cut by a creative player drops nothing. uncouple sets #nodrop before it unlinks, here it is set by hand. The chain is gone, the
+# follower is free and no chain item lies around
+function t32/start {
+	function train_test:lib/far_pair
+	scoreboard players set #nodrop train.tmp 1
+	execute as @e[tag=tt.f,limit=1] run function train:link/unlink
+	scoreboard players set #nodrop train.tmp 0
+}
+function t32/check {
+	execute if entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute if entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #ok train_test 0
+}
+#endregion
+
 #region Gametest poll functions
 # t0 as a scenario, the stage first
 function t0/run {

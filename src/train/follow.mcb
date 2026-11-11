@@ -38,6 +38,11 @@ function tick {
 	execute if score #len train.tmp matches ..<%u(0.1) - 1%> run scoreboard players set #len train.tmp <%u(0.1)%>
 	scoreboard players operation @s train.len = #len train.tmp
 
+	# Chain strain. A gap of 5 blocks or more for 5 ticks in a row breaks the chain, a single tick of it is only a blip
+	execute if score #len train.tmp matches <%u(5)%>.. run scoreboard players add @s train.strain 1
+	execute unless score #len train.tmp matches <%u(5)%>.. run scoreboard players set @s train.strain 0
+	execute if score @s train.strain matches 5.. run return run function train:follow/snap
+
 	# Chain display at the midpoint, raised 0.4
 	scoreboard players operation #cx train.tmp = #fx train.tmp
 	scoreboard players operation #cx train.tmp += #lx train.tmp
@@ -91,6 +96,12 @@ function tick {
 	# Only written when something is set, NBT writes every tick aren't free
 	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {Fuel:0s} run data modify entity @s Fuel set value 0s
 	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {PushX:0.0d,PushZ:0.0d} run data merge entity @s {PushX:0.0d,PushZ:0.0d}
+}
+
+# As a follower. The chain broke, it was stretched too far for too long. The leader is still marked from the sample
+function snap {
+	tag @e[tag=train.lead_now] remove train.lead_now
+	function train:link/unlink
 }
 
 # As the leader cart

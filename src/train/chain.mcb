@@ -24,14 +24,14 @@ for (const hand of ["mainhand", "offhand"]) {
 }
 %%>
 
-# As the player, after a successful link. The follower is still tagged train.target
+# As the player, after a successful link. The follower is still tagged train.target.
+# teleport_duration 3 delays the display to match the client smoothing on minecarts, 1 ran visibly ahead of the carts
 function spawn {
-	execute at @e[tag=train.target,limit=1] run summon minecraft:block_display ~ ~0.4 ~ {Tags:["train.chain","train.new"],teleport_duration:1,interpolation_duration:1,transformation:{translation:[-0.5f,0.5f,-0.75f],left_rotation:[0.70711f,0f,0f,0.70711f],scale:[1f,1.5f,1f],right_rotation:[0f,0f,0f,1f]}}
+	execute at @e[tag=train.target,limit=1] run summon minecraft:block_display ~ ~0.4 ~ {Tags:["train.chain","train.new"],teleport_duration:3,interpolation_duration:1,transformation:{translation:[-0.5f,0.5f,-0.75f],left_rotation:[0.70711f,0f,0f,0.70711f],scale:[1f,1.5f,1f],right_rotation:[0f,0f,0f,1f]}}
 	scoreboard players operation @e[tag=train.new,limit=1] train.id = @e[tag=train.target,limit=1] train.id
 	# Block matches whichever chain was used, main hand first
 	execute if items entity @s weapon.mainhand #train:couplers run function train:chain/state_mainhand
 	execute unless items entity @s weapon.mainhand #train:couplers run function train:chain/state_offhand
-	execute if entity @s[gamemode=creative] run tag @e[tag=train.new] add train.nodrop
 	tag @e[tag=train.new] remove train.new
 }
 
@@ -42,9 +42,10 @@ function apply {
 	execute store result entity @s Pos[2] double <%1 / UNIT%> run scoreboard players get #cz train.tmp
 	# Yaw and pitch toward the leader, so local z runs along the link. Aimed from 0.4 lower, otherwise the raise over the cart base tilts it toward the leader's feet
 	execute at @s positioned ~ ~-0.4 ~ facing entity @e[tag=train.lead_now,limit=1] feet run tp @s ~ ~0.4 ~ ~ ~
-	# Length is the gap minus 0.7, so each end tucks about 0.2 blocks into the cart walls and reads as attached
+	# Stretched center to center, then trimmed to the gap minus 1, so each end sits 0.5 from its cart's center. That is the cart's back face
+	# on the leader and its front face on the follower, and reads as attached
 	scoreboard players operation #clen train.tmp = #len train.tmp
-	scoreboard players remove #clen train.tmp <%u(0.7)%>
+	scoreboard players remove #clen train.tmp <%u(1.0)%>
 	execute if score #clen train.tmp matches ..<%u(0.2) - 1%> run scoreboard players set #clen train.tmp <%u(0.2)%>
 	# Rotated box is x 0..1, y -1..0, z 0..len from the corner, so the translation is -0.5, 0.5, -len/2 to center it on the entity
 	data modify storage train:tmp tf set value {translation:[-0.5f,0.5f,-0.75f],left_rotation:[0.70711f,0f,0f,0.70711f],scale:[1f,1.5f,1f],right_rotation:[0f,0f,0f,1f]}
@@ -60,17 +61,20 @@ function kill {
 	execute as @e[type=minecraft:block_display,tag=train.chain] if score @s train.id = #cid train.tmp run function train:chain/free
 }
 
-# As a chain display. Drops the chain item it was made from, where it hangs, and removes it.
-# A link made in creative used no chain, so it gives none back
+# As a chain display. The chain breaks where it hangs, with a sound and a puff of item particles, and drops the chain item it was made
+# from. The one case that drops nothing is #nodrop, set by uncouple for a creative player's cut
 function free {
-	execute unless entity @s[tag=train.nodrop] at @s run function train:chain/drop
+	# The block id and the item id are the same string for every chain
+	data modify storage train:drop item.id set from entity @s block_state
+	execute at @s run playsound minecraft:block.chain.break block @a ~ ~ ~ 1 1
+	execute at @s run function train:chain/particles with storage train:drop item
+	execute unless score #nodrop train.tmp matches 1 at @s run function train:chain/drop_item with storage train:drop item
 	kill @s
 }
 
-# The block id and the item id are the same string for every chain
-function drop {
-	data modify storage train:drop item.id set from entity @s block_state
-	function train:chain/drop_item with storage train:drop item
+# Macro
+function particles {
+	$particle minecraft:item{item:{id:"$(id)"}} ~ ~ ~ 0.15 0.15 0.15 0.05 12
 }
 
 # Macro

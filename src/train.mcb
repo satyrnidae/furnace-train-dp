@@ -17,6 +17,8 @@ function load minecraft:load {
 	scoreboard objectives add train.prev dummy
 	scoreboard objectives add train.sel dummy
 	scoreboard objectives add train.len dummy
+	# Ticks in a row a follower's gap has been at the break distance
+	scoreboard objectives add train.strain dummy
 	# Last position of a leader, its speed is the change since the last sample, see follow.mcb
 	scoreboard objectives add train.lpx dummy
 	scoreboard objectives add train.lpz dummy
