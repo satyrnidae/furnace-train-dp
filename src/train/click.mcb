@@ -1,4 +1,3 @@
-# TODO: Manual review needed. Please delete this line after review.
 # Click catchers. An interaction entity parked on a cart takes the player's click, since sneaking stops the cart from taking it.
 # They only exist while someone is sneaking nearby with a coupler or shears, and punching a cart doesn't work meanwhile.
 

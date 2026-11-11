@@ -801,7 +801,6 @@ function self_check {
 }
 #endregion
 
-# TODO: Manual review needed. Please delete this line after review.
 #region Deferred minors
 # t21 two followers of one leader. A trace marks the whole own train by walking the followers with #cur, which each visit overwrites. That is
 # safe because execute tests every source's if before any run starts, so both siblings are matched against the leader's id first. A test
