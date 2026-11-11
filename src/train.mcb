@@ -19,6 +19,10 @@ function load minecraft:load {
 	scoreboard objectives add train.len dummy
 	# Ticks in a row a follower's gap has been at the break distance
 	scoreboard objectives add train.strain dummy
+	# A follower's rails to its leader, see follow.mcb. Exit direction plus 1, units of path, and 1 while on a detour
+	scoreboard objectives add train.cdir dummy
+	scoreboard objectives add train.cgap dummy
+	scoreboard objectives add train.cdet dummy
 	# Last position of a leader, its speed is the change since the last sample, see follow.mcb
 	scoreboard objectives add train.lpx dummy
 	scoreboard objectives add train.lpz dummy
@@ -59,6 +63,7 @@ function load minecraft:load {
 	scoreboard players set #stop train.const <%u(2.5)%>
 	scoreboard players set #hit train.const <%u(0.1)%>
 	scoreboard players set #10 train.const 10
+	scoreboard players set #5 train.const 5
 	# Debug, 1 turns braking off so a head-on can be tested
 	scoreboard players set #noavoid train.const 0
 	# Registry of chunks this pack forceloaded, survives reloads

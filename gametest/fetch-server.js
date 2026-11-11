@@ -1,4 +1,3 @@
-// TODO: Manual review needed. Please delete this line after review.
 // Downloads the Mojang server jar for a version into .gametest/server and checks its SHA-1 against the manifest.
 // Usage: node gametest/fetch-server.js [version]. Default version is 26.3. Hosts: piston-meta.mojang.com for the manifest, and whatever
 // host the manifest names for the jar, piston-data.mojang.com. The jar needs Java 25 for 26.x.

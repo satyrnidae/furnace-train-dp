@@ -48,7 +48,8 @@ for (const [shape, s] of Object.entries(SHAPES)) {
 }
 const head = [
 	"\texecute unless block ~ ~ ~ #minecraft:rails run return 0",
-	"\texecute if entity @e[type=#train:carts,tag=!train.mine,dx=0,dy=0,dz=0] run return run function train:trace/hit",
+	"\texecute unless score #conn train.tmp matches 1 if entity @e[type=#train:carts,tag=!train.mine,dx=0,dy=0,dz=0] run return run function train:trace/hit",
+	"\texecute if score #conn train.tmp matches 1 if entity @e[tag=train.lead_now,dx=0,dy=0,dz=0] run return run function train:trace/hit_lead",
 	"\texecute if score #n train.tmp >= #reach train.const run return 0",
 	"\tscoreboard players add #n train.tmp 1",
 ];
@@ -68,7 +69,8 @@ emit.mcb("function step {\n" + head.concat(table, inside).join("\n") + "\n}");
 const MOVE = { n: [0, -1], e: [1, 0], s: [0, 1], w: [-1, 0] };
 for (const [d, [dx, dz]] of Object.entries(MOVE)) {
 	const walk = (dy) => `\texecute positioned ~${dx} ~${dy} ~${dz} if block ~ ~ ~ #minecraft:rails run return run function train:trace/step`;
-	const set = `\tscoreboard players set #h train.tmp ${HEAD[d]}`;
+	// #e keeps the direction the first block was left in, connect needs it
+	const set = `\tscoreboard players set #h train.tmp ${HEAD[d]}\n\texecute if score #n train.tmp matches 1 run scoreboard players set #e train.tmp ${HEAD[d]}`;
 	emit.mcb("function go_" + d + " {\n" + [set, walk(0), walk(-1)].join("\n") + "\n}");
 	emit.mcb("function up_" + d + " {\n" + [set, walk(1)].join("\n") + "\n}");
 }
@@ -78,6 +80,57 @@ for (const [d, [dx, dz]] of Object.entries(MOVE)) {
 function hit {
 	scoreboard players operation #gap train.tmp = #n train.tmp
 	scoreboard players operation #gap train.tmp *= #unit train.const
+}
+
+# As a follower, at it, with its leader tagged train.lead_now. Walks the rails both ways out of its block, looking for the leader.
+# Leaves #cdir train.tmp, the direction the first block was left in toward the leader, 0 N to 3 W, plus 1, and 0 when the rails
+# don't lead to the leader, a parallel track or one that is cut, or when it shares the block. #gap is the units along the path.
+# Takes no train tags, and the foreign cart check of run is off while #conn is 1
+function connect {
+	scoreboard players set #conn train.tmp 1
+	scoreboard players set #bg train.tmp <%u(99)%>
+	scoreboard players set #bd train.tmp 0
+	scoreboard players set #h train.tmp 0
+	function train:trace/connect_try
+	scoreboard players set #h train.tmp 1
+	function train:trace/connect_try
+	scoreboard players set #h train.tmp 2
+	function train:trace/connect_try
+	scoreboard players set #h train.tmp 3
+	function train:trace/connect_try
+	scoreboard players set #conn train.tmp 0
+	scoreboard players operation #gap train.tmp = #bg train.tmp
+	scoreboard players operation #cdir train.tmp = #bd train.tmp
+	# A hit in the follower's own block has no direction to go by
+	execute if score #gap train.tmp matches 0 run scoreboard players set #cdir train.tmp 0
+}
+
+# One heading of connect, the shortest path of the four is kept so a loop of track doesn't send a follower the long way round
+function connect_try {
+	scoreboard players set #gap train.tmp <%u(99)%>
+	scoreboard players set #cdir train.tmp 0
+	function train:trace/connect_go
+	execute if score #cdir train.tmp matches 1.. if score #gap train.tmp < #bg train.tmp run function train:trace/connect_keep
+}
+
+function connect_keep {
+	scoreboard players operation #bg train.tmp = #gap train.tmp
+	scoreboard players operation #bd train.tmp = #cdir train.tmp
+}
+
+# The walk of one heading, same start as run
+function connect_go {
+	scoreboard players set #n train.tmp 0
+	execute at @s align xyz if block ~ ~ ~ #minecraft:rails run function train:trace/step
+	execute at @s align xyz unless block ~ ~ ~ #minecraft:rails if block ~ ~-1 ~ #minecraft:rails positioned ~ ~-1 ~ run function train:trace/step
+}
+
+# The leader is in this block
+function hit_lead {
+	scoreboard players operation #gap train.tmp = #n train.tmp
+	scoreboard players operation #gap train.tmp *= #unit train.const
+	scoreboard players operation #cdir train.tmp = #e train.tmp
+	scoreboard players add #cdir train.tmp 1
 }
 
 # As a cart. Tags its own train, the cart and everything following it

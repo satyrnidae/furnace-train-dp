@@ -1,4 +1,3 @@
-# TODO: Manual review needed. Please delete this line after review.
 # A head furnace refuels from coal or charcoal in a chest cart somewhere behind it in its train. Fuel is topped up while it is still
 # above 0, because a furnace cart zeroes its push the moment fuel runs out. One item is 3600 ticks, same as vanilla.
 
