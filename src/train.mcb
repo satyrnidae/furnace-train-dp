@@ -61,6 +61,9 @@ function load minecraft:load {
 	scoreboard players set #10 train.const 10
 	# Debug, 1 turns braking off so a head-on can be tested
 	scoreboard players set #noavoid train.const 0
+	# Chunk loading, 1 on and 0 off. Flip it with /scoreboard players set #chunkload train.const 0. Only set here when unset so a reload keeps
+	# what was chosen. Off, the sweep frees every claim next tick
+	execute unless score #chunkload train.const = #chunkload train.const run scoreboard players set #chunkload train.const 1
 	# Registry of chunks this pack forceloaded, survives reloads
 	execute unless data storage train:chunks active run data modify storage train:chunks active set value []
 	# After a restart carts load a few ticks after the forced chunks do, so skip sweeping for a while
@@ -88,6 +91,7 @@ function tick minecraft:tick {
 
 	# Chunk claims are stamped with this tick, the sweep drops whatever wasn't touched
 	scoreboard players add #gen train.tmp 1
-	execute as @e[type=#train:carts,tag=!train.follower] if score @s train.id = @s train.id at @s run function train:chunks/head
+	# The sweep runs even with chunk loading off, nothing is touched so it releases what was claimed
+	execute if score #chunkload train.const matches 1 as @e[type=#train:carts,tag=!train.follower] if score @s train.id = @s train.id at @s run function train:chunks/head
 	function train:chunks/sweep
 }

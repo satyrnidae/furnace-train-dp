@@ -53,6 +53,7 @@ const gametest = {
 		{ id: "t27_brake_with_followers", steps: [[1, "t27/start"], [401, "t27/check"]] },
 		{ id: "t28_furnace_follower", steps: [[1, "t28/start"], [401, "t28/check"]] },
 		{ id: "t29_chunk_claims", steps: [[1, "chunk/start"], [60, "chunk/claimed"], [61, "chunk/derail"], [90, "chunk/released"]] },
+		{ id: "t33_chunkload_off", steps: [[1, "chunk/off_start"], [60, "chunk/off_check"], [61, "chunk/on"], [90, "chunk/claimed"], [91, "chunk/derail"], [120, "chunk/released"]] },
 		{ id: "t30_break_stalled", steps: [[1, "t30/start"], [3, "t30/still"], [40, "t30/check"]] },
 		{ id: "t31_blip_holds", steps: [[1, "t31/start"], [40, "t31/check"]] },
 		{ id: "t32_creative_cut", steps: [[1, "t32/start"], [3, "t32/check"]] },
