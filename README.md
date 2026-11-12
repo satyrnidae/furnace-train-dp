@@ -8,7 +8,7 @@ Trains stop on unpowered rails and resume when they're powered. They also refuel
 
 Link train cars from head to tail (important: velocity of the train is determined solely by the head!) with any variety of chain you desire.
 
-Trains load chunks as they pass through them, so they can run completely autonomously! To turn that off, run `/scoreboard players set #chunkload train.const 0`; any chunks the pack loaded are released within a tick. Set it back to 1 to turn it on again. It defaults to on and survives `/reload`.
+Trains load chunks as they pass through them, so they can run completely autonomously! To turn that off, run `/scoreboard players set #chunkload train.const 0`; any chunks the pack loaded are released within a tick, or up to 5 seconds after a reload. Set it back to 1 to turn it on again. It defaults to on and survives `/reload`.
 
 Also, you can do whatever this is:
 
