@@ -8,6 +8,16 @@
 // counts ticks and runs the steps below. A step is [age, function under train_test], age 1 is the first tick. Before each step the
 // score #ok train_test is 1, a step fails the test by setting it to 0. The last step passing accepts the test.
 // All scenarios build their stage at the origin marker at 100 64 100, see lib/begin in train_test.mcb. The structure is only the scaffold.
+// t33 polls the follower every 3 ticks while the pair goes around the U, a reversal lasts longer than that
+const hairpinWatch = [];
+for (let age = 4; age <= 240; age += 3) hairpinWatch.push([age, "t33/watch"]);
+// t35 and t36 poll the gaps between coupled carts every 4 ticks, a squeeze lasts longer than that
+const gapWatch = (last) => {
+	const steps = [];
+	for (let age = 4; age <= last; age += 4) steps.push([age, "bunch/watch"]);
+	return steps;
+};
+
 const gametest = {
 	size: [8, 2, 1],
 	// Ticks added to the last step for max_ticks. Room for the arena chunks to load before a test's clock starts
@@ -56,6 +66,10 @@ const gametest = {
 		{ id: "t30_break_stalled", steps: [[1, "t30/start"], [3, "t30/still"], [40, "t30/check"]] },
 		{ id: "t31_blip_holds", steps: [[1, "t31/start"], [40, "t31/check"]] },
 		{ id: "t32_creative_cut", steps: [[1, "t32/start"], [3, "t32/check"]] },
+		{ id: "t33_hairpin_no_rebound", steps: [[1, "t33/start"], ...hairpinWatch, [250, "t33/end"]] },
+		{ id: "t34_parallel_pull", steps: [[1, "t34/start"], [12, "t34/dragged"], [120, "t34/pulled"]] },
+		{ id: "t35_no_bunching_stop", steps: [[1, "t35/start"], ...gapWatch(400), [401, "t35/check"]] },
+		{ id: "t36_no_bunching_hairpin", steps: [[1, "t36/start"], ...gapWatch(440), [441, "t36/check"]] },
 	],
 };
 
