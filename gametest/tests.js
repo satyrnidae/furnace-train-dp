@@ -70,6 +70,7 @@ const gametest = {
 		{ id: "t34_parallel_pull", steps: [[1, "t34/start"], [12, "t34/dragged"], [120, "t34/pulled"]] },
 		{ id: "t35_no_bunching_stop", steps: [[1, "t35/start"], ...gapWatch(400), [401, "t35/check"]] },
 		{ id: "t36_no_bunching_hairpin", steps: [[1, "t36/start"], ...gapWatch(440), [441, "t36/check"]] },
+		{ id: "t43_crossed_link", steps: [[1, "t43/start"], [40, "t43/mark"], [70, "t43/check"]] },
 	],
 };
 
