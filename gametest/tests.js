@@ -70,6 +70,16 @@ const gametest = {
 		{ id: "t34_parallel_pull", steps: [[1, "t34/start"], [12, "t34/dragged"], [120, "t34/pulled"]] },
 		{ id: "t35_no_bunching_stop", steps: [[1, "t35/start"], ...gapWatch(400), [401, "t35/check"]] },
 		{ id: "t36_no_bunching_hairpin", steps: [[1, "t36/start"], ...gapWatch(440), [441, "t36/check"]] },
+		{ id: "t43_portal_hold", steps: [[1, "t43/start"], [3, "t43/check"], [40, "t43/check"]] },
+		{ id: "t44_portal_orphan", steps: [[1, "t44/start"], [55, "t44/near"], [100, "t44/check"]] },
+		{ id: "t45_portal_relink", steps: [[1, "t45/start"], [4, "t45/follow"], [30, "t45/check"]] },
+		{ id: "t46_leader_gone", steps: [[1, "t46/start"], [6, "t46/check"]] },
+		{ id: "t40_far_leader", steps: [[1, "t40/start"], [6, "t46/check"]] },
+		{ id: "t41_portal_coast", steps: [[1, "t41/start"], [8, "t41/check"]] },
+		{ id: "t37_real_portal", steps: [[1, "t37/start"], [400, "t37/check"]] },
+		{ id: "t38_portal_four", steps: [[1, "t38/start"], [500, "t38/check"]] },
+		{ id: "t39_portal_refuel", steps: [[1, "t39/start"], [500, "t39/check"]] },
+		{ id: "t42_portal_long", steps: [[1, "t42/start"], [600, "t42/check"]] },
 	],
 };
 

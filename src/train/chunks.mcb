@@ -16,9 +16,13 @@ function head {
 	# Any cart off the rails means derailed. Nothing gets touched then, so the sweep frees every chunk.
 	# The rail is in the block at the cart or the one below, the top of a slope puts the cart a bit over its rail
 	scoreboard players set #derail train.tmp 0
+	scoreboard players set #transit train.tmp 0
 	execute unless block ~ ~ ~ #minecraft:rails unless block ~ ~-1 ~ #minecraft:rails run scoreboard players set #derail train.tmp 1
 	scoreboard players operation #cur train.tmp = @s train.id
 	function train:chunks/scan_walk
+	# A follower holding for the head in another dimension is waiting to cross. The head lands off a rail there, which is no derail while
+	# the rest of the train is still coming, and freeing the claims would unload the chunks the followers are waiting in
+	execute if score #transit train.tmp matches 1 run scoreboard players set #derail train.tmp 0
 	execute if score #derail train.tmp matches 1 run return 0
 	function train:chunks/touch_cart
 	scoreboard players operation #cur train.tmp = @s train.id
@@ -31,6 +35,7 @@ function scan_walk {
 
 # As a follower, at it
 function scan_visit {
+	execute if score @s train.lost matches 1.. run scoreboard players set #transit train.tmp 1
 	execute unless block ~ ~ ~ #minecraft:rails unless block ~ ~-1 ~ #minecraft:rails run scoreboard players set #derail train.tmp 1
 	scoreboard players operation #cur train.tmp = @s train.id
 	function train:chunks/scan_walk
