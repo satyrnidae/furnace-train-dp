@@ -57,6 +57,8 @@ const gametest = {
 		{ id: "t30_break_stalled", steps: [[1, "t30/start"], [3, "t30/still"], [40, "t30/check"]] },
 		{ id: "t31_blip_holds", steps: [[1, "t31/start"], [40, "t31/check"]] },
 		{ id: "t32_creative_cut", steps: [[1, "t32/start"], [3, "t32/check"]] },
+		// Last on purpose, running the load function sets the sweep grace again
+		{ id: "t34_chunkload_reload", steps: [[1, "chunk/reload_unset"], [2, "chunk/reload_kept"], [3, "chunk/reload_done"]] },
 	],
 };
 

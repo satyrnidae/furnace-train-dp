@@ -1083,6 +1083,23 @@ function chunk/off_check {
 function chunk/on {
 	scoreboard players set #chunkload train.const 1
 }
+# A reload runs the load function. Unset it comes back on, set to 0 it stays 0
+function chunk/reload_unset {
+	scoreboard players set #ok train_test 1
+	scoreboard players reset #chunkload train.const
+	function train:load
+	execute unless score #chunkload train.const matches 1 run scoreboard players set #ok train_test 0
+	scoreboard players set #chunkload train.const 0
+	function train:load
+}
+function chunk/reload_kept {
+	scoreboard players set #ok train_test 1
+	execute unless score #chunkload train.const matches 0 run scoreboard players set #ok train_test 0
+}
+function chunk/reload_done {
+	scoreboard players set #chunkload train.const 1
+	scoreboard players set #ok train_test 1
+}
 function chunk/derail {
 	execute at @e[tag=tt.origin,limit=1] run setblock ~ ~ ~ minecraft:air
 }
