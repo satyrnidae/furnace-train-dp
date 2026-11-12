@@ -5,8 +5,10 @@ import ../../scale.js
 # The leader's speed is its real displacement since last tick. The Motion tag of a jammed cart holds whatever piled up, 3+ blocks
 # per tick was seen, and copying that made carts ram each other.
 # Spacing is 2 blocks because vanilla carts shove each other when hitboxes inflated by 0.2 touch, about 1.4 apart, and that fights the controller.
-# Hairpins and other track that doubles back are not supported. The pull is toward the leader in a straight line, so where the leader
-# is behind the follower the cart is dragged back along the track and stalls.
+# The pull is toward the leader in a straight line, so on track that doubles back, a hairpin or a sharp corner, it can point against the
+# follower's own track and the rail flips the cart backward. Where the follower's rails lead to the leader and the line isn't roughly
+# along the way out of its block, the follower drives along the rails instead, never backward. See align and detour below. A leader on
+# a parallel track is not connected by rails, the line is all there is, and the follower is pulled along it, backward if need be.
 
 # As a follower cart, at the follower
 function tick {
@@ -46,6 +48,24 @@ function tick {
 	function train:follow/blocked
 	execute if score #blocked train.tmp matches 1 run return run function train:follow/snap
 
+	# Rails to the leader. The chord is a straight line, so on a hairpin it points back along the follower's own track, and the rail
+	# flips a cart whose Motion opposes it. Whether the follower's rails lead to the leader, and how far, is walked every 5 ticks, every tick
+	# while on a detour. A parallel track never connects, and there the chord is the only signal, reversal included
+	scoreboard players operation #slot train.tmp = @s train.id
+	scoreboard players operation #slot train.tmp += #gen train.tmp
+	scoreboard players operation #slot train.tmp %= #5 train.const
+	# Self compare is the unset check, a missing score never equals anything, so a fresh follower walks at once
+	execute unless score @s train.cdir = @s train.cdir run scoreboard players set #slot train.tmp 0
+	execute if score @s train.cdet matches 1 run scoreboard players set #slot train.tmp 0
+	scoreboard players set #fresh train.tmp 0
+	execute if score #slot train.tmp matches 0 run function train:follow/connect
+	# A detour is a chord that isn't along the way out of the block toward the leader. The rails may have changed since the last walk, so
+	# one that looks like a detour gets a fresh walk before it is believed
+	function train:follow/align
+	execute if score #detour train.tmp matches 1 if score #fresh train.tmp matches 0 run function train:follow/connect
+	execute if score #detour train.tmp matches 1 if score #fresh train.tmp matches 1 run function train:follow/align
+	scoreboard players operation @s train.cdet = #detour train.tmp
+
 	# Chain display at the midpoint, raised 0.4
 	scoreboard players operation #cx train.tmp = #fx train.tmp
 	scoreboard players operation #cx train.tmp += #lx train.tmp
@@ -78,6 +98,9 @@ function tick {
 	scoreboard players operation #sp train.tmp += #err train.tmp
 	execute if score #sp train.tmp matches <%u(0.45)%>.. run scoreboard players set #sp train.tmp <%u(0.45)%>
 	execute if score #sp train.tmp matches ..-<%u(0.3)%> run scoreboard players set #sp train.tmp -<%u(0.3)%>
+
+	# On a detour the chord says nothing about which way along the track to go
+	execute if score #detour train.tmp matches 1 run function train:follow/detour
 
 	# Powered rails act on the cart after the write
 	execute if block ~ ~ ~ minecraft:powered_rail[powered=true] run function train:follow/boost_comp
@@ -135,6 +158,78 @@ function between {
 	scoreboard players operation #across train.tmp /= #len train.tmp
 	execute if score #along train.tmp >= #end train.tmp if score #along train.tmp < #lim train.tmp if score #across train.tmp matches -<%u(0.7) - 1%>..<%u(0.7) - 1%> run scoreboard players set #blocked train.tmp 1
 }
+
+
+# As a follower, at it, with the leader marked from the sample
+function connect {
+	scoreboard players set #fresh train.tmp 1
+	function train:trace/connect
+	scoreboard players operation @s train.cdir = #cdir train.tmp
+	scoreboard players operation @s train.cgap = #gap train.tmp
+}
+
+# As a follower. Sets #detour to 1 when the rails lead to the leader and the chord is not roughly along the way out, within 31 degrees,
+# in which case rail physics could flip the cart on a bend and send it the other way. A chord along the way out, including one that backs
+# off from a leader that is too close, is the normal case, and with no connection the chord is all there is, so neither is a detour
+function align {
+	scoreboard players set #detour train.tmp 0
+	execute unless score @s train.cdir matches 1.. run return 0
+	execute if score #dsq train.tmp matches ..<%u(0.3) ** 2 - 1%> run return 0
+	scoreboard players set #ce train.tmp 0
+	scoreboard players set #pp train.tmp 0
+	execute if score @s train.cdir matches 1 run scoreboard players operation #ce train.tmp -= #dz train.tmp
+	execute if score @s train.cdir matches 1 run scoreboard players operation #pp train.tmp = #dx train.tmp
+	execute if score @s train.cdir matches 2 run scoreboard players operation #ce train.tmp = #dx train.tmp
+	execute if score @s train.cdir matches 2 run scoreboard players operation #pp train.tmp = #dz train.tmp
+	execute if score @s train.cdir matches 3 run scoreboard players operation #ce train.tmp = #dz train.tmp
+	execute if score @s train.cdir matches 3 run scoreboard players operation #pp train.tmp = #dx train.tmp
+	execute if score @s train.cdir matches 4 run scoreboard players operation #ce train.tmp -= #dx train.tmp
+	execute if score @s train.cdir matches 4 run scoreboard players operation #pp train.tmp = #dz train.tmp
+	execute if score #pp train.tmp matches ..-1 run scoreboard players operation #pp train.tmp *= #-1 train.const
+	# Across times 5 against along times 3, 0.6 as a ratio
+	scoreboard players set #t train.tmp 5
+	scoreboard players operation #t train.tmp *= #pp train.tmp
+	scoreboard players set #q train.tmp 3
+	scoreboard players operation #q train.tmp *= #ce train.tmp
+	scoreboard players set #detour train.tmp 1
+	execute if score #ce train.tmp matches 1.. if score #t train.tmp <= #q train.tmp run scoreboard players set #detour train.tmp 0
+}
+
+# As a follower on a detour, replaces the speed and heading of the chord. Speed is the leader's, the larger axis of its velocity plus 0.4
+# of the smaller, and a catch up toward the spacing along the path gap, 0.1 at most, never backward. Heading is the way the rails leave
+# the follower's block toward the leader, written as a unit step so the Motion below is that direction times the speed
+function detour {
+	scoreboard players operation #ax train.tmp = #vx train.tmp
+	execute if score #ax train.tmp matches ..-1 run scoreboard players operation #ax train.tmp *= #-1 train.const
+	scoreboard players operation #az train.tmp = #vz train.tmp
+	execute if score #az train.tmp matches ..-1 run scoreboard players operation #az train.tmp *= #-1 train.const
+	scoreboard players operation #sp train.tmp = #ax train.tmp
+	scoreboard players operation #sp train.tmp > #az train.tmp
+	scoreboard players operation #t train.tmp = #ax train.tmp
+	scoreboard players operation #t train.tmp < #az train.tmp
+	scoreboard players operation #t train.tmp *= #2 train.const
+	scoreboard players operation #t train.tmp *= #2 train.const
+	scoreboard players operation #t train.tmp /= #10 train.const
+	scoreboard players operation #sp train.tmp += #t train.tmp
+	scoreboard players operation #err train.tmp = @s train.cgap
+	scoreboard players operation #err train.tmp -= #spacing train.const
+	scoreboard players operation #err train.tmp *= #20 train.const
+	scoreboard players operation #err train.tmp /= #100 train.const
+	execute if score #err train.tmp matches ..-1 run scoreboard players set #err train.tmp 0
+	execute if score #err train.tmp matches <%u(0.1)%>.. run scoreboard players set #err train.tmp <%u(0.1)%>
+	scoreboard players operation #sp train.tmp += #err train.tmp
+	execute if score #sp train.tmp matches <%u(0.45)%>.. run scoreboard players set #sp train.tmp <%u(0.45)%>
+	scoreboard players set #dx train.tmp 0
+	scoreboard players set #dz train.tmp 0
+	execute if score @s train.cdir matches 1 run scoreboard players set #dz train.tmp -1
+	execute if score @s train.cdir matches 2 run scoreboard players set #dx train.tmp 1
+	execute if score @s train.cdir matches 3 run scoreboard players set #dz train.tmp 1
+	execute if score @s train.cdir matches 4 run scoreboard players set #dx train.tmp -1
+	scoreboard players set #len train.tmp 1
+	# The deadband below is for the chord, not for this
+	scoreboard players set #dsq train.tmp <%u(1) ** 2%>
+}
+
 
 # As a follower. The chain broke, it was stretched too far for too long, or another cart is in the way. The leader is still marked from the sample
 function snap {
