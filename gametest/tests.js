@@ -56,6 +56,15 @@ const gametest = {
 		{ id: "t30_break_stalled", steps: [[1, "t30/start"], [3, "t30/still"], [40, "t30/check"]] },
 		{ id: "t31_blip_holds", steps: [[1, "t31/start"], [40, "t31/check"]] },
 		{ id: "t32_creative_cut", steps: [[1, "t32/start"], [3, "t32/check"]] },
+		{ id: "t33_portal_hold", steps: [[1, "t33/start"], [3, "t33/check"], [40, "t33/check"]] },
+		{ id: "t34_portal_orphan", steps: [[1, "t34/start"], [55, "t34/near"], [100, "t34/check"]] },
+		{ id: "t35_portal_relink", steps: [[1, "t35/start"], [4, "t35/follow"], [30, "t35/check"]] },
+		{ id: "t36_leader_gone", steps: [[1, "t36/start"], [6, "t36/check"]] },
+		{ id: "t40_far_leader", steps: [[1, "t40/start"], [6, "t36/check"]] },
+		{ id: "t41_portal_coast", steps: [[1, "t41/start"], [8, "t41/check"]] },
+		{ id: "t37_real_portal", steps: [[1, "t37/start"], [400, "t37/check"]] },
+		{ id: "t38_portal_four", steps: [[1, "t38/start"], [500, "t38/check"]] },
+		{ id: "t39_portal_refuel", steps: [[1, "t39/start"], [500, "t39/check"]] },
 	],
 };
 
