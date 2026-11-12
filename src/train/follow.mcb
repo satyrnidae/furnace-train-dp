@@ -42,6 +42,9 @@ function tick {
 	execute if score #len train.tmp matches <%u(5)%>.. run scoreboard players add @s train.strain 1
 	execute unless score #len train.tmp matches <%u(5)%>.. run scoreboard players set @s train.strain 0
 	execute if score @s train.strain matches 5.. run return run function train:follow/snap
+	# A cart of the chain order's wrong side in the way breaks the chain too, see blocked
+	function train:follow/blocked
+	execute if score #blocked train.tmp matches 1 run return run function train:follow/snap
 
 	# Chain display at the midpoint, raised 0.4
 	scoreboard players operation #cx train.tmp = #fx train.tmp
@@ -98,7 +101,42 @@ function tick {
 	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {PushX:0.0d,PushZ:0.0d} run data merge entity @s {PushX:0.0d,PushZ:0.0d}
 }
 
-# As a follower. The chain broke, it was stretched too far for too long. The leader is still marked from the sample
+# As a follower, at it, after the gap length. Sets #blocked train.tmp to 1 when another cart stands on the line to the leader, between the two
+# and not at either end. In a train that only happens when the chain order is not the order on the rail, say 3 leading 1 leading 2 with the
+# carts standing 1 2 3. The follower is then pulled through the cart in the middle, which backs off its own leader into the cart that
+# leads everything, and that is real velocity on a head nothing controls. The two feed each other and the train never stops, see issue 9.
+# Stays inside 8 blocks, the range of the leader sample
+function blocked {
+	scoreboard players set #blocked train.tmp 0
+	scoreboard players set #end train.tmp <%u(0.5)%>
+	scoreboard players operation #lim train.tmp = #len train.tmp
+	scoreboard players remove #lim train.tmp <%u(0.5)%>
+	execute as @e[type=#train:carts,distance=0.01..8] unless score @s train.id = #self train.tmp unless score @s train.id = #prev train.tmp run function train:follow/between
+}
+
+# As a cart that is not the follower or the leader, at the follower. Along is how far it is down the line to the leader, across how far off
+# the line, both in units. A cart whose along is from half a block to half a block short of the leader, and across under 0.7, is in the way
+function between {
+	execute store result score #ox train.tmp run data get entity @s Pos[0] <%UNIT%>
+	execute store result score #oz train.tmp run data get entity @s Pos[2] <%UNIT%>
+	scoreboard players operation #ox train.tmp -= #fx train.tmp
+	scoreboard players operation #oz train.tmp -= #fz train.tmp
+	scoreboard players operation #along train.tmp = #ox train.tmp
+	scoreboard players operation #along train.tmp *= #dx train.tmp
+	scoreboard players operation #q train.tmp = #oz train.tmp
+	scoreboard players operation #q train.tmp *= #dz train.tmp
+	scoreboard players operation #along train.tmp += #q train.tmp
+	scoreboard players operation #along train.tmp /= #len train.tmp
+	scoreboard players operation #across train.tmp = #ox train.tmp
+	scoreboard players operation #across train.tmp *= #dz train.tmp
+	scoreboard players operation #q train.tmp = #oz train.tmp
+	scoreboard players operation #q train.tmp *= #dx train.tmp
+	scoreboard players operation #across train.tmp -= #q train.tmp
+	scoreboard players operation #across train.tmp /= #len train.tmp
+	execute if score #along train.tmp >= #end train.tmp if score #along train.tmp < #lim train.tmp if score #across train.tmp matches -<%u(0.7) - 1%>..<%u(0.7) - 1%> run scoreboard players set #blocked train.tmp 1
+}
+
+# As a follower. The chain broke, it was stretched too far for too long, or another cart is in the way. The leader is still marked from the sample
 function snap {
 	tag @e[tag=train.lead_now] remove train.lead_now
 	function train:link/unlink
