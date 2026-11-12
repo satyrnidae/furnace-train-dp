@@ -76,6 +76,9 @@ function unlink {
 	scoreboard players reset @s train.prev
 	scoreboard players reset @s train.strain
 	scoreboard players reset @s train.lost
+	scoreboard players reset @s train.cdir
+	scoreboard players reset @s train.cgap
+	scoreboard players reset @s train.cdet
 }
 
 # As a cart with no id yet

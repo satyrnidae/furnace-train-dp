@@ -8,6 +8,16 @@
 // counts ticks and runs the steps below. A step is [age, function under train_test], age 1 is the first tick. Before each step the
 // score #ok train_test is 1, a step fails the test by setting it to 0. The last step passing accepts the test.
 // All scenarios build their stage at the origin marker at 100 64 100, see lib/begin in train_test.mcb. The structure is only the scaffold.
+// t33 polls the follower every 3 ticks while the pair goes around the U, a reversal lasts longer than that
+const hairpinWatch = [];
+for (let age = 4; age <= 240; age += 3) hairpinWatch.push([age, "t33/watch"]);
+// t35 and t36 poll the gaps between coupled carts every 4 ticks, a squeeze lasts longer than that
+const gapWatch = (last) => {
+	const steps = [];
+	for (let age = 4; age <= last; age += 4) steps.push([age, "bunch/watch"]);
+	return steps;
+};
+
 const gametest = {
 	size: [8, 2, 1],
 	// Ticks added to the last step for max_ticks. Room for the arena chunks to load before a test's clock starts
@@ -56,11 +66,15 @@ const gametest = {
 		{ id: "t30_break_stalled", steps: [[1, "t30/start"], [3, "t30/still"], [40, "t30/check"]] },
 		{ id: "t31_blip_holds", steps: [[1, "t31/start"], [40, "t31/check"]] },
 		{ id: "t32_creative_cut", steps: [[1, "t32/start"], [3, "t32/check"]] },
-		{ id: "t33_portal_hold", steps: [[1, "t33/start"], [3, "t33/check"], [40, "t33/check"]] },
-		{ id: "t34_portal_orphan", steps: [[1, "t34/start"], [55, "t34/near"], [100, "t34/check"]] },
-		{ id: "t35_portal_relink", steps: [[1, "t35/start"], [4, "t35/follow"], [30, "t35/check"]] },
-		{ id: "t36_leader_gone", steps: [[1, "t36/start"], [6, "t36/check"]] },
-		{ id: "t40_far_leader", steps: [[1, "t40/start"], [6, "t36/check"]] },
+		{ id: "t33_hairpin_no_rebound", steps: [[1, "t33/start"], ...hairpinWatch, [250, "t33/end"]] },
+		{ id: "t34_parallel_pull", steps: [[1, "t34/start"], [12, "t34/dragged"], [120, "t34/pulled"]] },
+		{ id: "t35_no_bunching_stop", steps: [[1, "t35/start"], ...gapWatch(400), [401, "t35/check"]] },
+		{ id: "t36_no_bunching_hairpin", steps: [[1, "t36/start"], ...gapWatch(440), [441, "t36/check"]] },
+		{ id: "t43_portal_hold", steps: [[1, "t43/start"], [3, "t43/check"], [40, "t43/check"]] },
+		{ id: "t44_portal_orphan", steps: [[1, "t44/start"], [55, "t44/near"], [100, "t44/check"]] },
+		{ id: "t45_portal_relink", steps: [[1, "t45/start"], [4, "t45/follow"], [30, "t45/check"]] },
+		{ id: "t46_leader_gone", steps: [[1, "t46/start"], [6, "t46/check"]] },
+		{ id: "t40_far_leader", steps: [[1, "t40/start"], [6, "t46/check"]] },
 		{ id: "t41_portal_coast", steps: [[1, "t41/start"], [8, "t41/check"]] },
 		{ id: "t37_real_portal", steps: [[1, "t37/start"], [400, "t37/check"]] },
 		{ id: "t38_portal_four", steps: [[1, "t38/start"], [500, "t38/check"]] },
