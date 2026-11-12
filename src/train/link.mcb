@@ -75,6 +75,7 @@ function unlink {
 	tag @s remove train.follower
 	scoreboard players reset @s train.prev
 	scoreboard players reset @s train.strain
+	scoreboard players reset @s train.lost
 }
 
 # As a cart with no id yet

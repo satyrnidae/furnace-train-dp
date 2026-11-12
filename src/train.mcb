@@ -19,6 +19,14 @@ function load minecraft:load {
 	scoreboard objectives add train.len dummy
 	# Ticks in a row a follower's gap has been at the break distance
 	scoreboard objectives add train.strain dummy
+	# Portal transit, see follow.mcb. Ticks a follower has held for a leader in another dimension, and the Motion it last wrote
+	scoreboard objectives add train.lost dummy
+	scoreboard objectives add train.lmx dummy
+	scoreboard objectives add train.lmz dummy
+	# Per chain display, where it hangs from its follower while the leader is away, in units
+	scoreboard objectives add train.ox dummy
+	scoreboard objectives add train.oy dummy
+	scoreboard objectives add train.oz dummy
 	# Last position of a leader, its speed is the change since the last sample, see follow.mcb
 	scoreboard objectives add train.lpx dummy
 	scoreboard objectives add train.lpz dummy
@@ -53,6 +61,8 @@ function load minecraft:load {
 	scoreboard players set #unit train.const <%UNIT%>
 	scoreboard players set #spacing train.const <%u(2)%>
 	scoreboard players set #chunk train.const <%16 * UNIT%>
+	# Ticks a follower holds for a leader that went to another dimension, see follow.mcb
+	scoreboard players set #holdmax train.const 60
 	# Collision avoidance. Period in ticks between traces, reach in blocks, stop gap and hard hit speed in units, #10 is the cap divisor
 	scoreboard players set #period train.const 20
 	scoreboard players set #reach train.const 16
