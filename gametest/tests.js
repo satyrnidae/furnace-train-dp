@@ -65,6 +65,7 @@ const gametest = {
 		{ id: "t37_real_portal", steps: [[1, "t37/start"], [400, "t37/check"]] },
 		{ id: "t38_portal_four", steps: [[1, "t38/start"], [500, "t38/check"]] },
 		{ id: "t39_portal_refuel", steps: [[1, "t39/start"], [500, "t39/check"]] },
+		{ id: "t42_portal_long", steps: [[1, "t42/start"], [600, "t42/check"]] },
 	],
 };
 

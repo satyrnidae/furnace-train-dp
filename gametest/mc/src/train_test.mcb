@@ -1277,6 +1277,7 @@ function lib/portal_flags {
 	scoreboard players set #fset train_test 0
 	scoreboard players set #fedcross train_test 0
 	scoreboard players set #outage train_test 0
+	scoreboard players set #plong train_test 0
 	scoreboard players set #pwatch train_test 1
 }
 
@@ -1394,10 +1395,125 @@ function portal/watch {
 	execute if score #fset train_test matches 1 store result score #fuel train_test run data get entity @e[tag=tt.h,limit=1] Fuel
 	execute if score #fset train_test matches 1 if score #fuel train_test matches 1000.. if score #fn train_test matches 0 run scoreboard players set #fedcross train_test 1
 	execute if score #fset train_test matches 1 if score #fuel train_test matches 0 run scoreboard players set #outage train_test 1
+	execute if score #plong train_test matches 1 run function train_test:portal/long_watch
 }
 function t39/cut {
 	data modify entity @e[tag=tt.h,limit=1] Fuel set value 60s
 	scoreboard players set #fset train_test 1
+}
+
+# t42 a long train through the real portal, eight carts, furnace tt.c0 and minecarts tt.c1 to tt.c7, 2 blocks apart from x 17 back to x 3,
+# each with a display tt.l1 to tt.l7. The carts of a train stay in order and apart: #order, a cart ever ahead of the one it follows in the
+# nether, #bunch, a cart ever within 1.2 blocks of it there, #broke and #held as in t37. At the end all eight are in the nether, seven
+# followers linked and not holding. Watched by portal/long_watch from portal/watch
+function lib/long_link {
+	$scoreboard players operation #lead train.tmp = @e[tag=$(a),limit=1] train.id
+	$execute as @e[tag=$(b),limit=1] run function train:link/apply
+	$execute as @e[tag=$(b),limit=1] run function train:link/assign_id
+	$function train_test:lib/chain_for {f:"$(b)",d:"$(d)",id:"minecraft:iron_chain"}
+}
+function t42/start {
+	function train_test:lib/portal_stage
+	# The nether side runs on to x 125, the chunk at 112 is forceloaded with the arena. A train needs room to clear the portal, a head
+	# that stops soon after it squeezes the rest back into the portal
+	execute in minecraft:the_nether run fill 113 63 96 125 63 104 minecraft:stone
+	execute in minecraft:the_nether run fill 113 64 96 125 68 104 minecraft:air
+	execute in minecraft:the_nether run fill 103 64 100 125 64 100 minecraft:rail[shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~-1 ~ ~19 ~-1 ~ minecraft:redstone_block
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~ ~ ~19 ~ ~ minecraft:powered_rail[shape=east_west,powered=true]
+	execute in minecraft:the_nether run fill 103 63 100 125 63 100 minecraft:redstone_block
+	execute in minecraft:the_nether run fill 103 64 100 125 64 100 minecraft:powered_rail[shape=east_west,powered=true]
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~17 ~ ~ {Tags:["tt","tt.h","tt.c0"],Fuel:3000s,PushX:1.0d,PushZ:0.0d}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~15 ~ ~ {Tags:["tt","tt.c1"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~13 ~ ~ {Tags:["tt","tt.c2"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~11 ~ ~ {Tags:["tt","tt.c3"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~9 ~ ~ {Tags:["tt","tt.c4"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~7 ~ ~ {Tags:["tt","tt.c5"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~5 ~ ~ {Tags:["tt","tt.c6"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~3 ~ ~ {Tags:["tt","tt.c7"]}
+	execute as @e[tag=tt.c0,limit=1] run function train:link/assign_id
+	function train_test:lib/long_link {a:"tt.c0",b:"tt.c1",d:"tt.l1"}
+	function train_test:lib/long_link {a:"tt.c1",b:"tt.c2",d:"tt.l2"}
+	function train_test:lib/long_link {a:"tt.c2",b:"tt.c3",d:"tt.l3"}
+	function train_test:lib/long_link {a:"tt.c3",b:"tt.c4",d:"tt.l4"}
+	function train_test:lib/long_link {a:"tt.c4",b:"tt.c5",d:"tt.l5"}
+	function train_test:lib/long_link {a:"tt.c5",b:"tt.c6",d:"tt.l6"}
+	function train_test:lib/long_link {a:"tt.c6",b:"tt.c7",d:"tt.l7"}
+	function train_test:lib/portal_flags
+	scoreboard players set #order train_test 0
+	scoreboard players set #bunch train_test 0
+	scoreboard players set #ncar train_test 8
+	scoreboard players set #nfol train_test 7
+	scoreboard players set #plong train_test 1
+}
+function t42/check {
+	scoreboard players set #pwatch train_test 0
+	scoreboard players set #plong train_test 0
+	function train_test:lib/long_dump
+	execute if score #broke train_test matches 1 run scoreboard players set #ok train_test 0
+	execute if score #order train_test matches 1 run scoreboard players set #ok train_test 0
+	execute if score #bunch train_test matches 1 run scoreboard players set #ok train_test 0
+	execute if score #items train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #inn train_test matches 8 run scoreboard players set #ok train_test 0
+	execute unless score #nl train_test matches 7 run scoreboard players set #ok train_test 0
+	execute unless score #held train_test matches 1 run scoreboard players set #ok train_test 0
+}
+function lib/long_dump {
+	say gt long broke/order/bunch/in nether/settled:
+	function train_test:lib/long_one {c:"tt.c0"}
+	function train_test:lib/long_one {c:"tt.c1"}
+	function train_test:lib/long_one {c:"tt.c2"}
+	function train_test:lib/long_one {c:"tt.c3"}
+	function train_test:lib/long_one {c:"tt.c4"}
+	function train_test:lib/long_one {c:"tt.c5"}
+	function train_test:lib/long_one {c:"tt.c6"}
+	function train_test:lib/long_one {c:"tt.c7"}
+	data modify storage train_test:long flags set value {b:0,o:0,u:0,i:0,l:0}
+	execute store result storage train_test:long flags.b int 1 run scoreboard players get #broke train_test
+	execute store result storage train_test:long flags.o int 1 run scoreboard players get #order train_test
+	execute store result storage train_test:long flags.u int 1 run scoreboard players get #bunch train_test
+	execute store result storage train_test:long flags.i int 1 run scoreboard players get #inn train_test
+	execute store result storage train_test:long flags.l int 1 run scoreboard players get #nl train_test
+	function train_test:lib/long_flags with storage train_test:long flags
+}
+function lib/long_flags {
+	$say gt long flags broke=$(b) order=$(o) bunch=$(u) in_nether=$(i) settled=$(l)
+}
+# Macro, c. One cart of the dump, its dimension, x and z in hundredths of a block and its lost count
+function lib/long_one {
+	data merge storage train_test:long {n:0,x:0,z:0,lost:0,nether:0}
+	$execute as @e[tag=$(c),limit=1] store result storage train_test:long x int 1 run data get entity @s Pos[0] 100
+	$execute as @e[tag=$(c),limit=1] store result storage train_test:long z int 1 run data get entity @s Pos[2] 100
+	$execute as @e[tag=$(c),limit=1] at @s if dimension minecraft:the_nether run data modify storage train_test:long nether set value 1
+	$execute as @e[tag=$(c),limit=1] if score @s train.lost matches 0.. store result storage train_test:long lost int 1 run scoreboard players get @s train.lost
+	$data modify storage train_test:long n set value "$(c)"
+	function train_test:lib/long_say with storage train_test:long
+}
+function lib/long_say {
+	$say gt long $(n) nether=$(nether) x=$(x) z=$(z) lost=$(lost)
+}
+
+# As portal/watch, every tick, the long train. Once the head is across, each follower is compared with the cart it follows when both are in
+# the nether
+function portal/long_watch {
+	execute as @e[tag=tt.c0,limit=1] at @s unless dimension minecraft:the_nether run return 0
+	function train_test:portal/long_pair {a:"tt.c0",b:"tt.c1"}
+	function train_test:portal/long_pair {a:"tt.c1",b:"tt.c2"}
+	function train_test:portal/long_pair {a:"tt.c2",b:"tt.c3"}
+	function train_test:portal/long_pair {a:"tt.c3",b:"tt.c4"}
+	function train_test:portal/long_pair {a:"tt.c4",b:"tt.c5"}
+	function train_test:portal/long_pair {a:"tt.c5",b:"tt.c6"}
+	function train_test:portal/long_pair {a:"tt.c6",b:"tt.c7"}
+}
+# Macro, a is the cart ahead and b the one that follows it. distance=0.. only finds a in b's dimension
+function portal/long_pair {
+	$execute as @e[tag=$(b),limit=1] at @s if dimension minecraft:the_nether if entity @e[tag=$(a),distance=0..] run function train_test:portal/long_cmp {a:"$(a)"}
+}
+function portal/long_cmp {
+	execute store result score #xb train_test run data get entity @s Pos[0] <%UNIT%>
+	$execute store result score #xa train_test run data get entity @e[tag=$(a),limit=1] Pos[0] <%UNIT%>
+	execute if score #xb train_test > #xa train_test run scoreboard players set #order train_test 1
+	$execute if entity @e[tag=$(a),distance=..1.2] run scoreboard players set #bunch train_test 1
 }
 #endregion
 
