@@ -51,6 +51,7 @@ function tick {
 	scoreboard players operation #slot train.tmp = @s train.id
 	scoreboard players operation #slot train.tmp += #gen train.tmp
 	scoreboard players operation #slot train.tmp %= #5 train.const
+	# Self compare is the unset check, a missing score never equals anything, so a fresh follower walks at once
 	execute unless score @s train.cdir = @s train.cdir run scoreboard players set #slot train.tmp 0
 	execute if score @s train.cdet matches 1 run scoreboard players set #slot train.tmp 0
 	scoreboard players set #fresh train.tmp 0
