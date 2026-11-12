@@ -56,6 +56,7 @@ const gametest = {
 		{ id: "t30_break_stalled", steps: [[1, "t30/start"], [3, "t30/still"], [40, "t30/check"]] },
 		{ id: "t31_blip_holds", steps: [[1, "t31/start"], [40, "t31/check"]] },
 		{ id: "t32_creative_cut", steps: [[1, "t32/start"], [3, "t32/check"]] },
+		{ id: "t43_crossed_link", steps: [[1, "t43/start"], [40, "t43/mark"], [70, "t43/check"]] },
 	],
 };
 

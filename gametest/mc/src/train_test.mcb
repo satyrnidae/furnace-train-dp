@@ -1146,6 +1146,48 @@ function t32/check {
 }
 #endregion
 
+#region Crossed links
+# t43 a link whose chord runs through another cart of the same train. Carts a b c in a row on the strip, a leads b, then c leads a, so the
+# chain order is c a b and a is pulled through b toward c. b is kicked toward c. Nothing feeds this, so every cart has to be at rest well
+# before the end, or the second link was refused. Unfixed, the three accelerate to 0.4 a tick and run off the 45 block strip around tick 80,
+# so positions are marked at tick 40 and compared at 70, while they are still on the rail. The kick alone coasts about 1 block in that window,
+# so the limit is 2
+function t43/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~6 ~ ~ {Tags:["tt","tt.a"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~8 ~ ~ {Tags:["tt","tt.b"],Motion:[0.3d,0.0d,0.0d]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~10 ~ ~ {Tags:["tt","tt.c"]}
+	execute as @e[tag=tt.a,limit=1] run function train:link/assign_id
+	execute as @e[tag=tt.b,limit=1] run function train:link/assign_id
+	execute as @e[tag=tt.c,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.a,limit=1] train.id
+	execute as @e[tag=tt.b,limit=1] run function train:link/apply
+	scoreboard players operation #lead train.tmp = @e[tag=tt.c,limit=1] train.id
+	execute as @e[tag=tt.a,limit=1] run function train:link/apply
+}
+function t43/mark {
+	execute store result score #pa train_test run data get entity @e[tag=tt.a,limit=1] Pos[0] <%UNIT%>
+	execute store result score #pb train_test run data get entity @e[tag=tt.b,limit=1] Pos[0] <%UNIT%>
+	execute store result score #pc train_test run data get entity @e[tag=tt.c,limit=1] Pos[0] <%UNIT%>
+}
+function t43/check {
+	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.c] run scoreboard players set #ok train_test 0
+	execute store result score #qa train_test run data get entity @e[tag=tt.a,limit=1] Pos[0] <%UNIT%>
+	execute store result score #qb train_test run data get entity @e[tag=tt.b,limit=1] Pos[0] <%UNIT%>
+	execute store result score #qc train_test run data get entity @e[tag=tt.c,limit=1] Pos[0] <%UNIT%>
+	scoreboard players operation #qa train_test -= #pa train_test
+	scoreboard players operation #qb train_test -= #pb train_test
+	scoreboard players operation #qc train_test -= #pc train_test
+	execute unless score #qa train_test matches -<%u(2)%>..<%u(2)%> run scoreboard players set #ok train_test 0
+	execute unless score #qb train_test matches -<%u(2)%>..<%u(2)%> run scoreboard players set #ok train_test 0
+	execute unless score #qc train_test matches -<%u(2)%>..<%u(2)%> run scoreboard players set #ok train_test 0
+}
+#endregion
+
 #region Gametest poll functions
 # t0 as a scenario, the stage first
 function t0/run {
