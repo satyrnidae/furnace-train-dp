@@ -147,10 +147,8 @@ function mark_walk {
 
 function mark_visit {
 	tag @s add train.mine
-	scoreboard players operation @s train.sav = #cur train.tmp
 	scoreboard players operation #cur train.tmp = @s train.id
 	function train:trace/mark_walk
-	scoreboard players operation #cur train.tmp = @s train.sav
 }
 
 function unmark {

@@ -40,8 +40,6 @@ function load minecraft:load {
 	scoreboard objectives add train.lpt dummy
 	scoreboard objectives add train.lvx dummy
 	scoreboard objectives add train.lvz dummy
-	# The #cur of the parent while a train walk is inside a cart, so a sibling is compared against the right id
-	scoreboard objectives add train.sav dummy
 	scoreboard objectives add train.halt dummy
 	scoreboard objectives add train.smx dummy
 	scoreboard objectives add train.smz dummy

@@ -364,15 +364,13 @@ function leader_sample {
 	execute unless score @s train.lpt = #pg train.tmp run scoreboard players operation @s train.lpz = #lz train.tmp
 	scoreboard players operation @s train.lpt = #gen train.tmp
 	# Real velocity is the position change since the last sample
-	scoreboard players add @s train.lpx 0
-	scoreboard players add @s train.lpz 0
 	scoreboard players operation #vx train.tmp = #lx train.tmp
 	scoreboard players operation #vx train.tmp -= @s train.lpx
 	scoreboard players operation #vz train.tmp = #lz train.tmp
 	scoreboard players operation #vz train.tmp -= @s train.lpz
 	scoreboard players operation @s train.lpx = #lx train.tmp
 	scoreboard players operation @s train.lpz = #lz train.tmp
-	# The first sample after linking has no history and teleports spike. Nothing real passes 0.45
+	# A teleport between two samples spikes. Nothing real passes 0.45
 	execute if score #vx train.tmp matches <%u(0.45)%>.. run scoreboard players set #vx train.tmp <%u(0.45)%>
 	execute if score #vx train.tmp matches ..-<%u(0.45)%> run scoreboard players set #vx train.tmp -<%u(0.45)%>
 	execute if score #vz train.tmp matches <%u(0.45)%>.. run scoreboard players set #vz train.tmp <%u(0.45)%>
