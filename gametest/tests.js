@@ -53,6 +53,7 @@ const gametest = {
 		{ id: "t18_reverse_yield", steps: [[1, "t18/start"], [121, "t18/reverse"], [136, "t18/check"]] },
 		{ id: "t19_far_coordinates", steps: [[1, "far/prep"], [80, "far/start"], [280, "far/check"]] },
 		{ id: "t20_follow_spacing", steps: [[1, "t20/start"], [101, "t20/check"]] },
+		{ id: "t52_stretched_follower", steps: [[1, "t52/start"], [30, "t52/stretch"], [85, "t52/check"]] },
 		{ id: "t21_sibling_followers", steps: [[1, "t21/run"]] },
 		{ id: "t22_snap_velocity", steps: [[1, "t22/run"]] },
 		{ id: "t23_gap_aging", steps: [[1, "t23/run"]] },
@@ -80,6 +81,10 @@ const gametest = {
 		{ id: "t38_portal_four", steps: [[1, "t38/start"], [500, "t38/check"]] },
 		{ id: "t39_portal_refuel", steps: [[1, "t39/start"], [500, "t39/check"]] },
 		{ id: "t42_portal_long", steps: [[1, "t42/start"], [600, "t42/check"]] },
+		{ id: "t47_portal_loop", steps: [[1, "t47/start"], [600, "t47/check"]] },
+		{ id: "t48_portal_loop_rider_mid", steps: [[1, "t48/start"], [600, "t48/check"]] },
+		{ id: "t49_portal_loop_rider_head", steps: [[1, "t49/start"], [600, "t49/check"]] },
+		{ id: "t50_portal_loop_rider_tail", steps: [[1, "t50/start"], [600, "t50/check"]] },
 	],
 };
 

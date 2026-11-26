@@ -35,14 +35,19 @@ function tick {
 
 	# Gap length, newton from last tick's value. Never lets the estimate collapse to 0, newton can't recover from that
 	scoreboard players operation #len train.tmp = @s train.len
+	scoreboard players operation #old train.tmp = @s train.len
 	execute if score #len train.tmp matches ..<%u(0.1) - 1%> run scoreboard players set #len train.tmp <%u(1.5)%>
 	function train:follow/sqrt
 	function train:follow/sqrt
 	execute if score #len train.tmp matches ..<%u(0.1) - 1%> run scoreboard players set #len train.tmp <%u(0.1)%>
 	scoreboard players operation @s train.len = #len train.tmp
 
-	# Chain strain. A gap of 5 blocks or more for 5 ticks in a row breaks the chain, a single tick of it is only a blip
-	execute if score #len train.tmp matches <%u(5)%>.. run scoreboard players add @s train.strain 1
+	# Chain strain. A gap of 5 blocks or more for 5 ticks in a row breaks the chain, a single tick of it is only a blip. A gap that is
+	# closing, a follower catching up on a stretch left by a slow trip through a portal, is neither a blip nor strain and leaves the count alone
+	scoreboard players set #closing train.tmp 0
+	scoreboard players operation #old train.tmp -= #len train.tmp
+	execute if score #old train.tmp matches <%u(0.03)%>.. run scoreboard players set #closing train.tmp 1
+	execute if score #len train.tmp matches <%u(5)%>.. if score #closing train.tmp matches 0 run scoreboard players add @s train.strain 1
 	execute unless score #len train.tmp matches <%u(5)%>.. run scoreboard players set @s train.strain 0
 	execute if score @s train.strain matches 5.. run return run function train:follow/snap
 
@@ -76,6 +81,9 @@ function tick {
 	scoreboard players operation #cz train.tmp += #lz train.tmp
 	scoreboard players operation #cz train.tmp /= #2 train.const
 	execute as @e[type=minecraft:block_display,tag=train.chain,distance=..12] if score @s train.id = #self train.tmp run function train:chain/apply
+	# Whether the leader is still within 1.5 blocks, for a wait, before its tag goes
+	scoreboard players set #near train.tmp 0
+	execute if score @s train.wait matches 1.. if entity @e[tag=train.lead_now,distance=..1.5] run scoreboard players set #near train.tmp 1
 	tag @e[tag=train.lead_now] remove train.lead_now
 
 	# Speed along the heading to the leader is the leader's speed on that heading plus a correction toward the spacing.
@@ -88,17 +96,23 @@ function tick {
 	scoreboard players operation #sp train.tmp /= #len train.tmp
 	scoreboard players operation #err train.tmp = #len train.tmp
 	scoreboard players operation #err train.tmp -= #spacing train.const
+	# A follower more than a block back may run faster than a cart usually does, to close a stretch before the chain gives
+	scoreboard players set #cap train.tmp <%u(0.45)%>
+	execute if score #err train.tmp matches <%u(1)%>.. run scoreboard players set #cap train.tmp <%u(0.65)%>
 	# Too close backs off 2.5x harder than too far catches up
 	scoreboard players set #gain train.tmp 20
 	execute if score #err train.tmp matches ..-1 run scoreboard players set #gain train.tmp 50
 	scoreboard players operation #err train.tmp *= #gain train.tmp
 	scoreboard players operation #err train.tmp /= #100 train.const
 	scoreboard players operation #sp train.tmp += #err train.tmp
-	execute if score #sp train.tmp matches <%u(0.45)%>.. run scoreboard players set #sp train.tmp <%u(0.45)%>
+	scoreboard players operation #sp train.tmp < #cap train.tmp
 	execute if score #sp train.tmp matches ..-<%u(0.3)%> run scoreboard players set #sp train.tmp -<%u(0.3)%>
 
 	# On a detour the chord says nothing about which way along the track to go
 	execute if score #detour train.tmp matches 1 run function train:follow/detour
+
+	# Out of a portal on top of the leader, see relink. The cart stays still until the leader is clear, the chain above is drawn all the same
+	execute if score @s train.wait matches 1.. run function train:follow/wait
 
 	# Powered rails act on the cart after the write
 	execute if block ~ ~ ~ minecraft:powered_rail[powered=true] run function train:follow/boost_comp
@@ -158,6 +172,11 @@ function align {
 	scoreboard players operation #q train.tmp *= #ce train.tmp
 	scoreboard players set #detour train.tmp 1
 	execute if score #ce train.tmp matches 1.. if score #t train.tmp <= #q train.tmp run scoreboard players set #detour train.tmp 0
+	# A path much longer than the chord is a leader on the other side of a bend, a U turn put it a block away across the lane. The chord
+	# calls that too close and backs the follower off, against the way the rails go
+	scoreboard players operation #t train.tmp = #len train.tmp
+	scoreboard players add #t train.tmp <%u(2)%>
+	execute if score @s train.cgap > #t train.tmp run scoreboard players set #detour train.tmp 1
 }
 
 # As a follower on a detour, replaces the speed and heading of the chord. Speed is the leader's, the larger axis of its velocity plus 0.4
@@ -181,9 +200,14 @@ function detour {
 	scoreboard players operation #err train.tmp *= #20 train.const
 	scoreboard players operation #err train.tmp /= #100 train.const
 	execute if score #err train.tmp matches ..-1 run scoreboard players set #err train.tmp 0
-	execute if score #err train.tmp matches <%u(0.1)%>.. run scoreboard players set #err train.tmp <%u(0.1)%>
+	# The catch up is 0.1 at most, 0.25 on a gap that is more than a block over
+	scoreboard players set #ecap train.tmp <%u(0.1)%>
+	scoreboard players operation #e2 train.tmp = @s train.cgap
+	scoreboard players operation #e2 train.tmp -= #spacing train.const
+	execute if score #e2 train.tmp matches <%u(1)%>.. run scoreboard players set #ecap train.tmp <%u(0.25)%>
+	scoreboard players operation #err train.tmp < #ecap train.tmp
 	scoreboard players operation #sp train.tmp += #err train.tmp
-	execute if score #sp train.tmp matches <%u(0.45)%>.. run scoreboard players set #sp train.tmp <%u(0.45)%>
+	scoreboard players operation #sp train.tmp < #cap train.tmp
 	scoreboard players set #dx train.tmp 0
 	scoreboard players set #dz train.tmp 0
 	execute if score @s train.cdir matches 1 run scoreboard players set #dz train.tmp -1
@@ -241,6 +265,16 @@ function coast_brake {
 	scoreboard players operation #mz train.tmp += #mz train.tmp
 }
 
+# As a follower with a wait running, after the chain display. Two carts out of a portal at one spot are sorted by vanilla's shove, which has no
+# idea who follows who, so a follower that landed within 1.5 blocks of its leader stays still until the leader has driven clear, or 40 ticks.
+# No Motion is written for the tick, the speed and the sums below it are not used
+function wait {
+	scoreboard players remove @s train.wait 1
+	execute if score #near train.tmp matches 0 run return run scoreboard players reset @s train.wait
+	data modify entity @s Motion set value [0.0d,0.0d,0.0d]
+	scoreboard players set #dsq train.tmp 0
+}
+
 # As a follower that was holding, at it, with the leader in range again. The gap restarts from 2 blocks and the leader's jump into this
 # dimension is not a speed. The display hops over if it was left behind, the next apply aims and stretches it
 function relink {
@@ -251,6 +285,10 @@ function relink {
 	scoreboard players set @s train.cdet 0
 	scoreboard players set #vx train.tmp 0
 	scoreboard players set #vz train.tmp 0
+	# The coast speed stops here. A follower that lands on its leader inside the deadband gets no Motion written, and would carry the
+	# coast straight through it
+	data modify entity @s Motion set value [0.0d,0.0d,0.0d]
+	execute if entity @e[tag=train.lead_now,distance=..1.5] run scoreboard players set @s train.wait 40
 	function train:chain/seen
 	tag @s add train.hold_now
 	function train:chain/hop

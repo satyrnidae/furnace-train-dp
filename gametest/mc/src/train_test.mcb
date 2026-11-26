@@ -599,6 +599,23 @@ function t20/check {
 	# It went somewhere, the head started at x 3 of the origin and the strip is 45 long
 	execute at @e[tag=tt.origin,limit=1] unless entity @e[tag=tt.h,distance=8..] run scoreboard players set #ok train_test 0
 }
+# t52, a follower stretched to 6 blocks from the cart ahead, what a delayed trip through a portal leaves behind it. The head and the first
+# follower are moved 4 blocks on at tick 30, and the last cart has to close up on its own and keep its chain
+function t52/start {
+	function train_test:t20/start
+}
+function t52/stretch {
+	execute as @e[tag=tt.h,limit=1] at @s run tp @s ~4 ~ ~
+	execute as @e[tag=tt.f,limit=1] at @s run tp @s ~4 ~ ~
+}
+function t52/check {
+	execute unless entity @e[tag=tt.g,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute store result score #fx train_test run data get entity @e[tag=tt.f,limit=1] Pos[0] <%UNIT%>
+	execute store result score #gx train_test run data get entity @e[tag=tt.g,limit=1] Pos[0] <%UNIT%>
+	scoreboard players operation #d2 train_test = #fx train_test
+	scoreboard players operation #d2 train_test -= #gx train_test
+	execute unless score #d2 train_test matches <%u(1.65)%>..<%u(2.5)%> run scoreboard players set #ok train_test 0
+}
 #endregion
 
 #region Far from the origin
@@ -1179,7 +1196,7 @@ function t43/start {
 function t43/check {
 	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
 	execute unless entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
-	execute if entity @e[type=minecraft:item] run scoreboard players set #ok train_test 0
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #ok train_test 0
 }
 
 # t34 a leader that never comes back is not waited on forever. A little before the hold is up the follower is still linked, well past it the
@@ -1195,8 +1212,8 @@ function t44/check {
 	execute unless score #holdmax train.const matches ..90 run scoreboard players set #ok train_test 0
 	execute if entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
 	execute if entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
-	execute unless entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:copper_chain"}}] run scoreboard players set #ok train_test 0
-	execute if entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:iron_chain"}}] run scoreboard players set #ok train_test 0
+	execute at @e[tag=tt.origin,limit=1] unless entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:copper_chain"}}] run scoreboard players set #ok train_test 0
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:iron_chain"}}] run scoreboard players set #ok train_test 0
 }
 
 # t35 the follower crosses after the leader. It lands 3 blocks from it, the link is back on, the display came along and sits at the follower,
@@ -1212,7 +1229,7 @@ function t45/check {
 	execute unless entity @e[tag=tt.f,tag=train.follower,scores={train.strain=0}] run scoreboard players set #ok train_test 0
 	execute unless entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
 	execute as @e[tag=tt.f,limit=1] at @s unless entity @e[tag=tt.d,distance=..4] run scoreboard players set #ok train_test 0
-	execute if entity @e[type=minecraft:item] run scoreboard players set #ok train_test 0
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #ok train_test 0
 }
 
 # t36 a leader that is gone for good, not just in another dimension, still frees the follower at once. The hold is only for a leader
@@ -1288,6 +1305,8 @@ function lib/portal_stage {
 	scoreboard players set #noavoid train.const 0
 	execute unless loaded 820 64 800 run scoreboard players set #ok train_test 0
 	execute positioned 800.5 64 800.5 run summon minecraft:marker ~ ~ ~ {Tags:["tt","tt.origin"]}
+	# Items left at the stage by an earlier test, cleanup above only reaches the arena at 100 100
+	execute positioned 800.5 64 800.5 run kill @e[type=minecraft:item,distance=..64]
 	function train_test:lib/flat
 	function train_test:lib/nether_floor
 	# Overworld frame, a solid 1x5x4 of obsidian with the inside swapped for portal blocks. Facing east, the plane runs along z
@@ -1389,7 +1408,8 @@ function portal/watch {
 	execute as @e[tag=tt.g,limit=1] at @s if entity @e[tag=tt.d2,distance=..6] run scoreboard players add #near train_test 1
 	execute as @e[tag=tt.k,limit=1] at @s if entity @e[tag=tt.d3,distance=..6] run scoreboard players add #near train_test 1
 	execute if score #inn train_test = #ncar train_test if score #nl train_test = #nfol train_test if score #near train_test = #nfol train_test run scoreboard players set #relinked train_test 1
-	execute if entity @e[type=minecraft:item] run scoreboard players set #items train_test 1
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #items train_test 1
+	execute in minecraft:the_nether positioned 100.5 64 100.5 if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #items train_test 1
 	# Refuel phase, t39
 	execute if score #fuelphase train_test matches 1 if score #hn train_test matches 1 if score #fn train_test matches 0 unless score #fset train_test matches 1 run function train_test:t39/cut
 	execute if score #fset train_test matches 1 store result score #fuel train_test run data get entity @e[tag=tt.h,limit=1] Fuel
@@ -1418,11 +1438,15 @@ function t42/start {
 	# that stops soon after it squeezes the rest back into the portal
 	execute in minecraft:the_nether run fill 113 63 96 125 63 104 minecraft:stone
 	execute in minecraft:the_nether run fill 113 64 96 125 68 104 minecraft:air
-	execute in minecraft:the_nether run fill 103 64 100 125 64 100 minecraft:rail[shape=east_west]
 	execute at @e[tag=tt.origin,limit=1] run fill ~ ~-1 ~ ~19 ~-1 ~ minecraft:redstone_block
 	execute at @e[tag=tt.origin,limit=1] run fill ~ ~ ~ ~19 ~ ~ minecraft:powered_rail[shape=east_west,powered=true]
 	execute in minecraft:the_nether run fill 103 63 100 125 63 100 minecraft:redstone_block
 	execute in minecraft:the_nether run fill 103 64 100 125 64 100 minecraft:powered_rail[shape=east_west,powered=true]
+	function train_test:lib/long_train
+}
+
+# The train of t42 and t47 on the portal stage, see t42
+function lib/long_train {
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~17 ~ ~ {Tags:["tt","tt.h","tt.c0"],Fuel:3000s,PushX:1.0d,PushZ:0.0d}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~15 ~ ~ {Tags:["tt","tt.c1"]}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~13 ~ ~ {Tags:["tt","tt.c2"]}
@@ -1445,6 +1469,90 @@ function t42/start {
 	scoreboard players set #ncar train_test 8
 	scoreboard players set #nfol train_test 7
 	scoreboard players set #plong train_test 1
+}
+# t47 the same into a balloon loop, the track in the nether is two lanes one block apart, out and back, joined by a U turn at x 109. The
+# lanes are activator rails, bare rails side by side would join into each other. The train is longer than the loop, so the head comes back
+# beside carts that are still going in, and then runs into the portal from the nether side and back to the overworld, where the return
+# lane lands it off the rail. The chain has to hold the whole way, no link broken, nothing dropped and no follower left holding. Watched
+# by portal/long_watch like t42, but the order and spacing flags mean nothing here, carts pass each other on the lanes and end in a pile
+function t47/start {
+	function train_test:t47/build
+	function train_test:lib/long_train
+}
+# t48 to t50, the loop with a villager riding the middle cart, the head and the tail. A rider is what a player is to a cart, only still
+function t48/start {
+	function train_test:t47/build
+	function train_test:lib/long_train
+	function train_test:lib/ride {c:"tt.c3"}
+}
+function t49/start {
+	function train_test:t47/build
+	function train_test:lib/long_train
+	function train_test:lib/ride {c:"tt.c0"}
+}
+function t50/start {
+	function train_test:t47/build
+	function train_test:lib/long_train
+	function train_test:lib/ride {c:"tt.c7"}
+}
+function t48/check {
+	function train_test:t47/check
+}
+function t49/check {
+	function train_test:t47/check
+}
+function t50/check {
+	function train_test:t47/check
+}
+# Macro, c. A villager without AI sits in that cart
+function lib/ride {
+	$execute as @e[tag=$(c),limit=1] at @s run summon minecraft:villager ~ ~ ~ {NoAI:1b,Silent:1b,Invulnerable:1b,Tags:["tt","tt.rider"]}
+	$ride @e[tag=tt.rider,limit=1] mount @e[tag=$(c),limit=1]
+}
+function t47/build {
+	function train_test:lib/portal_stage
+	execute in minecraft:the_nether run fill 113 63 96 125 63 104 minecraft:stone
+	execute in minecraft:the_nether run fill 113 64 96 125 68 104 minecraft:air
+	execute in minecraft:the_nether run fill 103 64 100 108 64 101 minecraft:activator_rail[shape=east_west]
+	execute in minecraft:the_nether run setblock 109 64 100 minecraft:rail[shape=south_west]
+	execute in minecraft:the_nether run setblock 109 64 101 minecraft:rail[shape=north_west]
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~-1 ~ ~19 ~-1 ~ minecraft:redstone_block
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~ ~ ~19 ~ ~ minecraft:powered_rail[shape=east_west,powered=true]
+	# Overworld side of the return lane, the train comes out of the portal at z 801 heading west and drives off along it
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~-1 ~1 ~19 ~-1 ~1 minecraft:redstone_block
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~ ~1 ~19 ~ ~1 minecraft:powered_rail[shape=east_west,powered=true]
+}
+function t47/check {
+	scoreboard players set #pwatch train_test 0
+	scoreboard players set #plong train_test 0
+	function train_test:lib/long_dump
+	execute if score #broke train_test matches 1 run function train_test:t47/fail {why:"a link broke"}
+	execute if score #items train_test matches 1 run function train_test:t47/fail {why:"an item dropped"}
+	execute unless score #nl train_test matches 7 run function train_test:t47/fail {why:"not all followers settled"}
+	# The head drove away from the portal on the return lane
+	execute in minecraft:overworld unless entity @e[tag=tt.c0,x=780,dx=32,y=60,dy=10,z=790,dz=20] run function train_test:t47/fail {why:"head not on the return lane"}
+	# The tail went in and round the U turn with the rest, and is back on the return lane
+	execute in minecraft:overworld unless entity @e[tag=tt.c7,x=800,dx=20,y=60,dy=10,z=801,dz=1] run function train_test:t47/fail {why:"tail not on the return lane"}
+	# Back in the order it went in, the lane runs west so each cart is east of the one it follows
+	function train_test:t47/pair {a:"tt.c0",b:"tt.c1"}
+	function train_test:t47/pair {a:"tt.c1",b:"tt.c2"}
+	function train_test:t47/pair {a:"tt.c2",b:"tt.c3"}
+	function train_test:t47/pair {a:"tt.c3",b:"tt.c4"}
+	function train_test:t47/pair {a:"tt.c4",b:"tt.c5"}
+	function train_test:t47/pair {a:"tt.c5",b:"tt.c6"}
+	function train_test:t47/pair {a:"tt.c6",b:"tt.c7"}
+}
+# Macro, a is the cart ahead and b the one that follows it
+function t47/pair {
+	$execute store result score #xa train_test run data get entity @e[tag=$(a),limit=1] Pos[0] <%UNIT%>
+	$execute store result score #xb train_test run data get entity @e[tag=$(b),limit=1] Pos[0] <%UNIT%>
+	$execute unless score #xb train_test > #xa train_test run say gt fail out of order $(a) $(b)
+	execute unless score #xb train_test > #xa train_test run scoreboard players set #ok train_test 0
+}
+# Macro, why. Fails the test and says which assertion
+function t47/fail {
+	$say gt fail $(why)
+	scoreboard players set #ok train_test 0
 }
 function t42/check {
 	scoreboard players set #pwatch train_test 0

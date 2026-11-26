@@ -23,6 +23,8 @@ function load minecraft:load {
 	scoreboard objectives add train.lost dummy
 	scoreboard objectives add train.lmx dummy
 	scoreboard objectives add train.lmz dummy
+	# Ticks a follower that landed on its leader stays still, see follow.mcb
+	scoreboard objectives add train.wait dummy
 	# Per chain display, where it hangs from its follower while the leader is away, in units
 	scoreboard objectives add train.ox dummy
 	scoreboard objectives add train.oy dummy
