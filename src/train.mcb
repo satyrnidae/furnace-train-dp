@@ -5,8 +5,8 @@
 # Click handling: a function can't see the clicked entity, and a sneaking click on a minecart is a pass so no advancement fires. While
 # a player sneaks with a coupler or shears, carts in reach get an interaction entity parked on them, and its interaction data is the click.
 # Units: positions, gaps and speeds are scores in units of 1/64 block, see scale.js, saved motion and push are in ten thousandths.
-# Tags, the sneaking predicate and the take_one item modifier are plain JSON under data/train. The couplers tag has optional entries
-# that mcb tags can't express.
+# Tags, the sneaking predicate and the take_one item modifier are declared below. The couplers tag has optional entries that mcb tags
+# can't express, so it is built from chains.js as JSON.
 
 import ../scale.js
 import objectives.js
