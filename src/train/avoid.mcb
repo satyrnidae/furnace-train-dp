@@ -7,10 +7,12 @@
 # train.halt 3 is yielding, see head.mcb. The speed cap has to be under 0.2, a head tops out there, before it counts as blocked.
 
 import ../../scale.js
+import ../objectives.js
+import ../math.mcbt
 
 # Called from train:tick right after the sampler, before head/rail
 function tick {
-	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower] at @s run function train:avoid/head
+	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower,tag=!global.ignore] at @s run function train:avoid/head
 }
 
 # As a head, at it
@@ -56,10 +58,8 @@ function age {
 	execute if score @s train.dir matches 3 if score @s train.svx matches 0.. run return 0
 	execute if score @s train.dir matches 2 if score @s train.svz matches ..0 run return 0
 	execute if score @s train.dir matches 0 if score @s train.svz matches 0.. run return 0
-	scoreboard players operation #ax train.tmp = @s train.svx
-	execute if score #ax train.tmp matches ..-1 run scoreboard players operation #ax train.tmp *= #-1 train.const
-	scoreboard players operation #az train.tmp = @s train.svz
-	execute if score #az train.tmp matches ..-1 run scoreboard players operation #az train.tmp *= #-1 train.const
+	abs #ax train.tmp @s train.svx
+	abs #az train.tmp @s train.svz
 	scoreboard players operation #big train.tmp = #ax train.tmp
 	scoreboard players operation #big train.tmp > #az train.tmp
 	scoreboard players operation #small train.tmp = #ax train.tmp
@@ -76,4 +76,19 @@ function age {
 function enter {
 	scoreboard players set @s train.halt 3
 	function train:head/yield
+}
+
+# Gap to the next cart along the rail, tick of the last trace, and the heading it looked along. A different heading means an immediate
+# trace, and a resume resets it for the same reason
+function load minecraft:load {
+	REPEAT (objectives.avoid) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
+}
+
+# Removes this module's objectives
+function uninstall train:uninstall {
+	REPEAT (objectives.avoid) as o {
+		scoreboard objectives remove train.<%o%>
+	}
 }

@@ -4,7 +4,7 @@
 # Carts within 6 blocks of a sneaking player holding a coupler or shears get a catcher, everything else loses it
 function arm {
 	tag @e[type=#train:carts,tag=train.hot] remove train.hot
-	execute as @a at @s if predicate train:sneaking if items entity @s weapon.* #train:tools as @e[type=#train:carts,distance=..6] run tag @s add train.hot
+	execute as @a at @s if predicate train:sneaking if items entity @s weapon.* #train:tools as @e[type=#train:carts,distance=..6,tag=!global.ignore] run tag @s add train.hot
 	execute as @e[type=#train:carts,tag=train.hot] at @s run function train:click/hot_cart
 	execute as @e[type=minecraft:interaction,tag=train.hit] run function train:click/hit_gc
 }
@@ -39,7 +39,13 @@ function hit {
 	execute as @e[type=#train:carts,distance=..4] if score @s train.id = #cid train.tmp run tag @s add train.target
 	# Target is the last entity to right click an interaction entity
 	execute on target run function train:link/use
-	tag @e[tag=train.target] remove train.target
+	tag @e[type=#train:carts,tag=train.target] remove train.target
 	data remove entity @s interaction
 	data remove entity @s attack
+}
+
+# Removes the click catchers and the tag that arms a cart
+function uninstall train:uninstall {
+	kill @e[type=minecraft:interaction,tag=train.hit]
+	tag @e[type=#train:carts] remove train.hot
 }

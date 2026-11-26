@@ -1,0 +1,36 @@
+# Score math helpers. Every template works on a score as "<name> <objective>", the pack's objective is train.tmp for the temporaries.
+# Limits are integers in whatever scale the score has, so callers splice units in, as <%u(0.45)%>.
+
+template abs {
+	# Absolute value of a copy: abs #ax train.tmp @s train.smx
+	with t:word o:word s:word so:word {
+		scoreboard players operation <%t%> <%o%> = <%s%> <%so%>
+		execute if score <%t%> <%o%> matches ..-1 run scoreboard players operation <%t%> <%o%> *= #-1 train.const
+	}
+	# In place: abs #ax train.tmp
+	with t:word o:word {
+		execute if score <%t%> <%o%> matches ..-1 run scoreboard players operation <%t%> <%o%> *= #-1 train.const
+	}
+}
+
+template cap {
+	# Upper limit: cap #sp train.tmp 29
+	with t:word o:word hi:word {
+		execute if score <%t%> <%o%> matches <%Number(hi) + 1%>.. run scoreboard players set <%t%> <%o%> <%hi%>
+	}
+}
+
+template floor {
+	# Lower limit: floor #sp train.tmp -19
+	with t:word o:word lo:word {
+		execute if score <%t%> <%o%> matches ..<%Number(lo) - 1%> run scoreboard players set <%t%> <%o%> <%lo%>
+	}
+}
+
+template clamp {
+	# Both limits: clamp #vx train.tmp -29 29
+	with t:word o:word lo:word hi:word {
+		cap <%t%> <%o%> <%hi%>
+		floor <%t%> <%o%> <%lo%>
+	}
+}

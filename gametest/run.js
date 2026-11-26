@@ -43,19 +43,33 @@ build(root);
 build(path.join(root, "gametest", "mc"));
 const gametestPack = generate(root);
 
-const packs = path.join(server, "packs");
+// A run of its own, so sessions testing at the same time don't clobber each other's packs, universe and report. The folder is the working
+// directory of the server, which also reads its server.properties from there, with a port nobody else is using. Libraries and versions of
+// the bundler stay shared, in the server folder.
+const runDir = path.join(server, "runs", `${process.pid}-${Date.now()}`);
+fs.mkdirSync(runDir, { recursive: true });
+function freePort() {
+	const r = spawnSync(process.execPath, ["-e", "const s=require('node:net').createServer();s.listen(0,()=>{console.log(s.address().port);s.close()})"], { encoding: "utf8" });
+	return Number(r.stdout.trim());
+}
+const port = freePort();
+fs.writeFileSync(path.join(runDir, "server.properties"), `server-port=${port}\nquery.port=${port}\nenable-query=false\nenable-rcon=false\n`);
+fs.writeFileSync(path.join(runDir, "eula.txt"), "eula=true\n");
+process.on("exit", () => fs.rmSync(runDir, { recursive: true, force: true }));
+
+const packs = path.join(runDir, "packs");
 fs.rmSync(packs, { recursive: true, force: true });
 fs.mkdirSync(path.join(packs, "train"), { recursive: true });
 fs.copyFileSync(path.join(root, "pack.mcmeta"), path.join(packs, "train", "pack.mcmeta"));
 fs.cpSync(path.join(root, "data"), path.join(packs, "train", "data"), { recursive: true });
 fs.cpSync(gametestPack, path.join(packs, "gametest"), { recursive: true });
 
-const report = path.join(server, "report.xml");
-fs.rmSync(report, { force: true });
-const result = spawnSync(java, ["-DbundlerMainClass=net.minecraft.gametest.Main", "-jar", "server.jar", "--packs", "./packs", "--universe", "./uni", "--report", "./report.xml", "--tests", filter], { cwd: server, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+const report = path.join(runDir, "report.xml");
+const result = spawnSync(java, ["-DbundlerMainClass=net.minecraft.gametest.Main", `-DbundlerRepoDir=${server}`, "-jar", path.join(server, "server.jar"), "--packs", "./packs", "--universe", "./uni", "--report", "./report.xml", "--tests", filter, "--port", String(port)], { cwd: runDir, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
 if (result.error) throw result.error;
 const status = result.status;
 const serverLog = `${result.stdout || ""}${result.stderr || ""}`;
+// The newest run's log, for whoever looks after a run, each run has its own folder and it is gone when the run is
 fs.writeFileSync(path.join(server, "run.log"), serverLog);
 // The log lines the tests write with say, the dump of a failing step and the PASS and FAIL of each step, plus anything the server complains about
 for (const line of serverLog.split("\n")) if (/\bgt (dump|FAIL|PASS|shape)\b/.test(line)) console.log(line.replace(/^\[[^\]]*\] \[[^\]]*\]: (\[[^\]]*\] )*/, "  "));

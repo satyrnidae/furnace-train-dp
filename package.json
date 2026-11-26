@@ -6,7 +6,8 @@
   "scripts": {
     "build": "mcb build",
     "watch": "mcb watch",
-    "test": "node gametest/run.js",
+    "test": "node scripts/check-lang.js && node gametest/run.js",
+    "lang:check": "node scripts/check-lang.js",
     "gametest:fetch": "node gametest/fetch-server.js"
   },
   "devDependencies": {

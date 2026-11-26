@@ -1,22 +1,12 @@
-import ../../scale.js
-
 # The chain between two carts. A block display of the chain item's block, same id as the follower so a pair stays matched.
 # The string block state can't carry an axis, so the chain stays axis y. Its y scale is the length and a 90 degree x rotation lays it
 # onto the display's forward direction, which is aimed at the leader every tick.
 
+import ../../scale.js
+import ../chains.js
+import ../objectives.js
+
 <%%
-// Every chain item has a block of the same id. The ids are from memory except iron_chain, and a wrong one fails the function load
-const chains = [
-	"iron_chain",
-	"copper_chain",
-	"exposed_copper_chain",
-	"weathered_copper_chain",
-	"oxidized_copper_chain",
-	"waxed_copper_chain",
-	"waxed_exposed_copper_chain",
-	"waxed_weathered_copper_chain",
-	"waxed_oxidized_copper_chain",
-];
 // Sets the new display's block from the chain in that hand
 for (const hand of ["mainhand", "offhand"]) {
 	const lines = chains.map((id) => `\texecute if items entity @s weapon.${hand} minecraft:${id} run data modify entity @e[type=minecraft:block_display,tag=train.new,limit=1] block_state set value "minecraft:${id}"`);
@@ -27,12 +17,12 @@ for (const hand of ["mainhand", "offhand"]) {
 # As the player, after a successful link. The follower is still tagged train.target.
 # teleport_duration 3 delays the display to match the client smoothing on minecarts, 1 ran visibly ahead of the carts
 function spawn {
-	execute at @e[tag=train.target,limit=1] run summon minecraft:block_display ~ ~0.4 ~ {Tags:["train.chain","train.new"],teleport_duration:3,interpolation_duration:1,transformation:{translation:[-0.5f,0.5f,-0.75f],left_rotation:[0.70711f,0f,0f,0.70711f],scale:[1f,1.5f,1f],right_rotation:[0f,0f,0f,1f]}}
-	scoreboard players operation @e[tag=train.new,limit=1] train.id = @e[tag=train.target,limit=1] train.id
+	execute at @e[type=#train:carts,tag=train.target,limit=1] run summon minecraft:block_display ~ ~0.4 ~ {Tags:["train.chain","train.new"],teleport_duration:3,interpolation_duration:1,transformation:{translation:[-0.5f,0.5f,-0.75f],left_rotation:[0.70711f,0f,0f,0.70711f],scale:[1f,1.5f,1f],right_rotation:[0f,0f,0f,1f]}}
+	scoreboard players operation @e[type=minecraft:block_display,tag=train.new,limit=1] train.id = @e[type=#train:carts,tag=train.target,limit=1] train.id
 	# Block matches whichever chain was used, main hand first
 	execute if items entity @s weapon.mainhand #train:couplers run function train:chain/state_mainhand
 	execute unless items entity @s weapon.mainhand #train:couplers run function train:chain/state_offhand
-	tag @e[tag=train.new] remove train.new
+	tag @e[type=minecraft:block_display,tag=train.new] remove train.new
 }
 
 # As a follower, at it. Sets #seen train.tmp to 1 when its chain display is in the follower's dimension. A selector with a distance only
@@ -89,7 +79,7 @@ function place {
 function apply {
 	function train:chain/place
 	# Yaw and pitch toward the leader, so local z runs along the link. Aimed from 0.4 lower, otherwise the raise over the cart base tilts it toward the leader's feet
-	execute at @s positioned ~ ~-0.4 ~ facing entity @e[tag=train.lead_now,limit=1] feet run tp @s ~ ~0.4 ~ ~ ~
+	execute at @s positioned ~ ~-0.4 ~ facing entity @e[type=#train:carts,tag=train.lead_now,limit=1] feet run tp @s ~ ~0.4 ~ ~ ~
 	# Stretched center to center, then trimmed to the gap minus 1, so each end sits 0.5 from its cart's center. That is the cart's back face
 	# on the leader and its front face on the follower, and reads as attached
 	scoreboard players operation #clen train.tmp = #len train.tmp
@@ -136,4 +126,19 @@ function check {
 	scoreboard players set #alive train.tmp 0
 	execute as @e[type=#train:carts,tag=train.follower] if score @s train.id = #cid train.tmp run scoreboard players set #alive train.tmp 1
 	execute if score #alive train.tmp matches 0 run function train:chain/free
+}
+
+# Where a display hangs from its follower while the leader is away, in units
+function load minecraft:load {
+	REPEAT (objectives.chain) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
+}
+
+# Breaks every chain display without dropping anything
+function uninstall train:uninstall {
+	kill @e[type=minecraft:block_display,tag=train.chain]
+	REPEAT (objectives.chain) as o {
+		scoreboard objectives remove train.<%o%>
+	}
 }

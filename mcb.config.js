@@ -3,5 +3,10 @@ module.exports = {
 	formatVersion: 121,
 	generatedDirName: "__generated__",
 	internalScoreboardName: "train.internal",
+	// eq temporaries and constants, named here so the pack owns them and does not share mcb.eq.* with other packs
+	eqVarScoreboardName: "train.eq.var",
+	eqConstScoreboardName: "train.eq.const",
+	// Name of the folder or zip in the world, for the uninstall function to disable
+	packName: "furnace-train-dp",
 	header: "# Furnace Minecart Trains, data pack prototype\n# Built using mc-build (https://github.com/mc-build/mc-build)",
 };

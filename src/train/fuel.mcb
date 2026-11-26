@@ -43,3 +43,8 @@ function add {
 	scoreboard players add #f train.tmp 3600
 	execute store result entity @s Fuel short 1 run scoreboard players get #f train.tmp
 }
+
+# Removes the tag of the head being fueled
+function uninstall train:uninstall {
+	tag @e[type=minecraft:furnace_minecart] remove train.head_now
+}

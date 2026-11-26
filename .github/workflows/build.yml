@@ -1,0 +1,121 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Runs on every pull request and push. The lang check, a build that fails on a compile error, and the gametests
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - run: npm ci
+
+      - name: Fetch server jar
+        run: node gametest/fetch-server.js
+
+      # npm test is the lang check, then the gametest runner, which builds the pack and fails on a compile error
+      - name: Lang check and gametests
+        run: npm test
+        env:
+          GAMETEST_SERVER: ${{ github.workspace }}/.gametest/server
+
+      - name: Upload server log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gametest-run-log
+          path: .gametest/server/run.log
+          if-no-files-found: ignore
+
+  # Zips of the two packs, not on pull requests
+  build:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build datapack
+        run: npm run build
+
+      - name: Read version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # pack.mcmeta and data/ sit at the top of the zip, which is what the datapacks folder expects
+      - name: Zip datapack
+        run: zip -r "furnace_train_${{ steps.version.outputs.version }}.zip" pack.mcmeta data
+
+      - name: Zip resource pack
+        working-directory: resourcepack
+        run: zip -r "../furnace_train_resourcepack_${{ steps.version.outputs.version }}.zip" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: furnace_train_${{ steps.version.outputs.version }}
+          path: furnace_train_${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: furnace_train_resourcepack_${{ steps.version.outputs.version }}
+          path: furnace_train_resourcepack_${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+
+  # Runs on a v* tag only. The tag may carry a prerelease suffix, v0.2.0-rc.1, and its version before the suffix has to match
+  # package.json. A suffix makes it a prerelease and goes into the zip names, so release candidates do not share a name.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Check the tag and name the zips
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          base="${tag%%-*}"
+          for kind in furnace_train furnace_train_resourcepack; do
+            test -f "${kind}_${base}.zip" || { echo "::error::${kind}_${base}.zip not found, the tag ${GITHUB_REF_NAME} does not match the version in package.json"; exit 1; }
+            test "${base}" = "${tag}" || mv "${kind}_${base}.zip" "${kind}_${tag}.zip"
+          done
+          if [ "${base}" = "${tag}" ]; then echo "prerelease=" >> "$GITHUB_ENV"; else echo "prerelease=--prerelease" >> "$GITHUB_ENV"; fi
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            "furnace_train_${tag}.zip" \
+            "furnace_train_resourcepack_${tag}.zip" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes $prerelease

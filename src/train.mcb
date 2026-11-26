@@ -5,60 +5,21 @@
 # Click handling: a function can't see the clicked entity, and a sneaking click on a minecart is a pass so no advancement fires. While
 # a player sneaks with a coupler or shears, carts in reach get an interaction entity parked on them, and its interaction data is the click.
 # Units: positions, gaps and speeds are scores in units of 1/64 block, see scale.js, saved motion and push are in ten thousandths.
-# Tags, the sneaking predicate and the take_one item modifier are plain JSON under data/train. The couplers tag has optional entries
-# that mcb tags can't express.
+# Tags, the sneaking predicate and the take_one item modifier are declared below. The couplers tag has optional entries that mcb tags
+# can't express, so it is built from chains.js as JSON.
 
 import ../scale.js
+import objectives.js
+import chains.js
+import text/advancement.js
+import text/uninstall.js
 
 #region Setup
 function load minecraft:load {
-	# Per cart
-	scoreboard objectives add train.id dummy
-	scoreboard objectives add train.prev dummy
-	scoreboard objectives add train.sel dummy
-	scoreboard objectives add train.len dummy
-	# Ticks in a row a follower's gap has been at the break distance
-	scoreboard objectives add train.strain dummy
-	# Portal transit, see follow.mcb. Ticks a follower has held for a leader in another dimension, and the Motion it last wrote
-	scoreboard objectives add train.lost dummy
-	scoreboard objectives add train.lmx dummy
-	scoreboard objectives add train.lmz dummy
-	# Ticks a follower that landed on its leader stays still, see follow.mcb
-	scoreboard objectives add train.wait dummy
-	# Per chain display, where it hangs from its follower while the leader is away, in units
-	scoreboard objectives add train.ox dummy
-	scoreboard objectives add train.oy dummy
-	scoreboard objectives add train.oz dummy
-	# A follower's rails to its leader, see follow.mcb. Exit direction plus 1, units of path, and 1 while on a detour
-	scoreboard objectives add train.cdir dummy
-	scoreboard objectives add train.cgap dummy
-	scoreboard objectives add train.cdet dummy
-	# Last position of a leader, its speed is the change since the last sample, see follow.mcb
-	scoreboard objectives add train.lpx dummy
-	scoreboard objectives add train.lpz dummy
-	scoreboard objectives add train.halt dummy
-	scoreboard objectives add train.smx dummy
-	scoreboard objectives add train.smz dummy
-	scoreboard objectives add train.spx dummy
-	scoreboard objectives add train.spz dummy
-	# Furnace carts, see sample.mcb and avoid.mcb. Position last tick, velocity, last heading 0 N 1 E 2 S 3 W, gap to the next cart along the rail, tick of the last trace
-	scoreboard objectives add train.ppx dummy
-	scoreboard objectives add train.ppz dummy
-	scoreboard objectives add train.svx dummy
-	scoreboard objectives add train.svz dummy
-	# The velocity of the tick before, the crash check reads both, see crash.mcb
-	scoreboard objectives add train.pvx dummy
-	scoreboard objectives add train.pvz dummy
-	scoreboard objectives add train.dir dummy
-	scoreboard objectives add train.gap dummy
-	scoreboard objectives add train.chk dummy
-	# Heading the last trace looked along, a different heading means an immediate trace. Reset by a resume for the same reason
-	scoreboard objectives add train.tdir dummy
-	# Per chunk, fake players named c<dimension>_<x>_<z>
-	scoreboard objectives add train.cgen dummy
-	scoreboard objectives add train.cpres dummy
-	scoreboard objectives add train.tmp dummy
-	scoreboard objectives add train.const dummy
+	# The temporaries and constants every module shares. Each module declares its own objectives in a load block of its own
+	REPEAT (objectives.shared) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
 	scoreboard players set #2 train.const 2
 	scoreboard players set #-1 train.const -1
 	scoreboard players set #16 train.const 16
@@ -80,14 +41,37 @@ function load minecraft:load {
 	# Debug, 1 turns braking off so a head-on can be tested
 	scoreboard players set #noavoid train.const 0
 	# Chunk loading, 0 off and anything else on. Flip it with /scoreboard players set #chunkload train.const 0. Only set here when unset so a
-	# reload keeps what was chosen. Off, the sweep frees every claim next tick, or once the grace below runs out after a reload
+	# reload keeps what was chosen. Off, the sweep frees every claim on the next pass, or once the grace below runs out after a reload
 	execute unless score #chunkload train.const = #chunkload train.const run scoreboard players set #chunkload train.const 1
-	# Registry of chunks this pack forceloaded, survives reloads
-	execute unless data storage train:chunks active run data modify storage train:chunks active set value []
-	# After a restart carts load a few ticks after the forced chunks do, so skip sweeping for a while
-	scoreboard players set #grace train.tmp 100
+	# After a restart carts load a few ticks after the forced chunks do, so skip sweeping for a while, 20 passes of 5 ticks
+	scoreboard players set #grace train.tmp 20
 }
 #endregion
+
+# Removes everything the pack created, then disables it. Run as an operator: /function train:uninstall
+# Carts stay as they are, unlinked. Chunks the pack forceloaded are released, except those that were forced before it.
+function uninstall {
+	tellraw @s <%uninstallText.start%>
+
+	# Each module removes its own objectives, tags and entities through this tag
+	function #train:uninstall
+
+	data remove storage train:tmp tf
+	data remove storage train:drop item
+
+	REPEAT (objectives.shared) as o {
+		scoreboard objectives remove train.<%o%>
+	}
+	scoreboard objectives remove train.eq.var
+	scoreboard objectives remove train.eq.const
+
+	# The result has to be read after the objectives are gone, so it goes in a storage value
+	execute store success storage train:tmp uninstalled byte 1 run datapack disable "file/<%config.packName%>"
+	execute unless data storage train:tmp {uninstalled:1b} run tellraw @s <%uninstallText.manual%>
+	execute if data storage train:tmp {uninstalled:1b} run tellraw @s <%uninstallText.done%>
+	data remove storage train:tmp uninstalled
+}
+
 
 function tick minecraft:tick {
 	# Velocities of every furnace cart, first so everything below sees this tick's
@@ -101,15 +85,72 @@ function tick minecraft:tick {
 	execute as @e[type=minecraft:interaction,tag=train.hit] at @s if data entity @s interaction run function train:click/hit
 	execute as @e[type=minecraft:interaction,tag=train.hit] if data entity @s attack run data remove entity @s attack
 
-	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower] at @s run function train:head/rail
-	execute as @e[type=#train:carts,tag=train.follower] at @s run function train:follow/tick
-	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower] run function train:fuel/check
-	execute as @e[type=minecraft:block_display,tag=train.chain] run function train:chain/check
+	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower,tag=!global.ignore,tag=!global.ignore.pos] at @s run function train:head/rail
+	execute as @e[type=#train:carts,tag=train.follower,tag=!global.ignore,tag=!global.ignore.pos] at @s run function train:follow/tick
+	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower,tag=!global.ignore] run function train:fuel/check
+	# Orphans are rare, the check runs once a second
+	execute if score #p20 train.tmp matches 0 run execute as @e[type=minecraft:block_display,tag=train.chain] run function train:chain/check
 	function train:click/arm
 
-	# Chunk claims are stamped with this tick, the sweep drops whatever wasn't touched
 	scoreboard players add #gen train.tmp 1
-	# The sweep runs even with chunk loading off, nothing is touched so it releases what was claimed
-	execute unless score #chunkload train.const matches 0 as @e[type=#train:carts,tag=!train.follower] if score @s train.id = @s train.id at @s run function train:chunks/head
-	function train:chunks/sweep
+	eq #p5 train.tmp = #gen train.tmp % 5
+	eq #p20 train.tmp = #gen train.tmp % 20
+	# Chunk claims are stamped with the pass tick and the sweep drops whatever wasn't touched. A cart covers 2 blocks in 5 ticks at most, and
+	# its square reaches 7.5, so a pass every fifth tick keeps the chunks ahead of the train and halves the macro calls twice over
+	execute if score #p5 train.tmp matches 0 run function train:chunks/pass
+}
+
+# The pack's node of the datapack advancement tree, under the author node of src/global.mcb
+advancement root {
+	"display": {
+		"title": <%advText.rootTitle%>,
+		"description": <%advText.rootDescription%>,
+		"icon": {"id": "minecraft:furnace_minecart"},
+		"show_toast": false,
+		"announce_to_chat": false
+	},
+	"parent": "global:satyrnidae/author",
+	"criteria": {
+		"trigger": {"trigger": "minecraft:tick"}
+	}
+}
+
+# Carts, anything the pack couples. Spawner and command block carts are included, they are carts to a train
+tag entity_types carts {
+	minecraft:minecart
+	minecraft:furnace_minecart
+	minecraft:chest_minecart
+	minecraft:hopper_minecart
+	minecraft:tnt_minecart
+	minecraft:spawner_minecart
+	minecraft:command_block_minecart
+}
+
+tag items fuel {
+	minecraft:coal
+	minecraft:charcoal
+}
+
+# Anything a sneaking player can couple or cut with
+tag items tools {
+	#train:couplers
+	minecraft:shears
+}
+
+# Every chain item. Optional entries, an id a version doesn't have is skipped instead of failing the tag, which mcb tags can't say
+json tags/item couplers {
+	"values": <%JSON.stringify(chains.map((id) => ({ id: "minecraft:" + id, required: false })))%>
+}
+
+predicate sneaking {
+	"type": "minecraft:entity_properties",
+	"entity": "this",
+	"predicate": { "flags": { "is_sneaking": true } }
+}
+
+# Takes one item from a stack
+item_modifier take_one {
+	"type": "minecraft:set_count",
+	"count": -1,
+	"add": true
 }

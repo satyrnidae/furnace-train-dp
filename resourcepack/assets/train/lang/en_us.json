@@ -1,0 +1,12 @@
+{
+  "train.advancement.root.description": "Chain furnace minecarts into self-driving trains!",
+  "train.advancement.root.title": "Furnace Minecart Trains",
+  "train.link.cancelled": "Coupler: cancelled",
+  "train.link.coupled": "Coupled",
+  "train.link.first": "Coupler: click the cart behind it",
+  "train.link.nothing": "Nothing to uncouple",
+  "train.link.uncoupled": "Uncoupled",
+  "train.uninstall.done": "Furnace Minecart Trains: uninstalled",
+  "train.uninstall.manual": "Remove the data pack folder or zip from the world's datapacks folder, it could not be disabled by name",
+  "train.uninstall.start": "Furnace Minecart Trains: uninstalling"
+}

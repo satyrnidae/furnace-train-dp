@@ -1,5 +1,3 @@
-import ../../scale.js
-
 # Follower control. Each follower copies the speed of the cart ahead along the line to it, plus a correction toward 2 blocks of
 # spacing, and gets that written as its Motion every tick. Rail physics keeps the speed and puts the direction on the track.
 # The leader's speed is its real displacement since last tick. The Motion tag of a jammed cart holds whatever piled up, 3+ blocks
@@ -10,28 +8,28 @@ import ../../scale.js
 # along the way out of its block, the follower drives along the rails instead, never backward. See align and detour below. A leader on
 # a parallel track is not connected by rails, the line is all there is, and the follower is pulled along it, backward if need be.
 
+import ../../scale.js
+import ../objectives.js
+import ../math.mcbt
+
 # As a follower cart, at the follower
 function tick {
 	scoreboard players operation #prev train.tmp = @s train.prev
 	scoreboard players operation #self train.tmp = @s train.id
 	scoreboard players set #found train.tmp 0
-	execute store result score #fx train.tmp run data get entity @s Pos[0] <%UNIT%>
-	execute store result score #fy train.tmp run data get entity @s Pos[1] <%UNIT%>
-	execute store result score #fz train.tmp run data get entity @s Pos[2] <%UNIT%>
+	# Position read once, every entity read serializes the whole cart
+	data modify storage train:tmp pos set from entity @s Pos
+	execute store result score #fx train.tmp run data get storage train:tmp pos[0] <%UNIT%>
+	execute store result score #fy train.tmp run data get storage train:tmp pos[1] <%UNIT%>
+	execute store result score #fz train.tmp run data get storage train:tmp pos[2] <%UNIT%>
 	execute as @e[type=#train:carts,distance=..8] if score @s train.id = #prev train.tmp run function train:follow/leader_sample
 	execute if score #found train.tmp matches 0 run return run function train:follow/lost
 	execute if score @s train.lost matches 1.. run function train:follow/relink
 
 	# Vector to the leader
-	scoreboard players operation #dx train.tmp = #lx train.tmp
-	scoreboard players operation #dx train.tmp -= #fx train.tmp
-	scoreboard players operation #dz train.tmp = #lz train.tmp
-	scoreboard players operation #dz train.tmp -= #fz train.tmp
-	scoreboard players operation #dsq train.tmp = #dx train.tmp
-	scoreboard players operation #dsq train.tmp *= #dx train.tmp
-	scoreboard players operation #t train.tmp = #dz train.tmp
-	scoreboard players operation #t train.tmp *= #dz train.tmp
-	scoreboard players operation #dsq train.tmp += #t train.tmp
+	eq #dx train.tmp = #lx train.tmp - #fx train.tmp
+	eq #dz train.tmp = #lz train.tmp - #fz train.tmp
+	eq #dsq train.tmp = #dx train.tmp * #dx train.tmp + #dz train.tmp * #dz train.tmp
 
 	# Gap length, newton from last tick's value. Never lets the estimate collapse to 0, newton can't recover from that
 	scoreboard players operation #len train.tmp = @s train.len
@@ -65,32 +63,19 @@ function tick {
 	scoreboard players operation @s train.cdet = #detour train.tmp
 
 	# Chain display at the midpoint, raised 0.4
-	scoreboard players operation #cx train.tmp = #fx train.tmp
-	scoreboard players operation #cx train.tmp += #lx train.tmp
-	scoreboard players operation #cx train.tmp /= #2 train.const
-	scoreboard players operation #cy train.tmp = #fy train.tmp
-	scoreboard players operation #cy train.tmp += #ly train.tmp
-	scoreboard players operation #cy train.tmp /= #2 train.const
-	scoreboard players add #cy train.tmp <%u(0.4)%>
-	scoreboard players operation #cz train.tmp = #fz train.tmp
-	scoreboard players operation #cz train.tmp += #lz train.tmp
-	scoreboard players operation #cz train.tmp /= #2 train.const
+	eq #cx train.tmp = (#fx train.tmp + #lx train.tmp) / 2
+	eq #cy train.tmp = (#fy train.tmp + #ly train.tmp) / 2 + <%u(0.4)%>
+	eq #cz train.tmp = (#fz train.tmp + #lz train.tmp) / 2
 	execute as @e[type=minecraft:block_display,tag=train.chain,distance=..12] if score @s train.id = #self train.tmp run function train:chain/apply
 	# Whether the leader is still within 1.5 blocks, for a wait, before its tag goes
 	scoreboard players set #near train.tmp 0
-	execute if score @s train.wait matches 1.. if entity @e[tag=train.lead_now,distance=..1.5] run scoreboard players set #near train.tmp 1
-	tag @e[tag=train.lead_now] remove train.lead_now
+	execute if score @s train.wait matches 1.. if entity @e[type=#train:carts,tag=train.lead_now,distance=..1.5] run scoreboard players set #near train.tmp 1
+	tag @e[type=#train:carts,tag=train.lead_now] remove train.lead_now
 
 	# Speed along the heading to the leader is the leader's speed on that heading plus a correction toward the spacing.
 	# Gap over spacing speeds up, gap under slows or backs off, so energy never builds up down the train
-	scoreboard players operation #sp train.tmp = #vx train.tmp
-	scoreboard players operation #sp train.tmp *= #dx train.tmp
-	scoreboard players operation #t train.tmp = #vz train.tmp
-	scoreboard players operation #t train.tmp *= #dz train.tmp
-	scoreboard players operation #sp train.tmp += #t train.tmp
-	scoreboard players operation #sp train.tmp /= #len train.tmp
-	scoreboard players operation #err train.tmp = #len train.tmp
-	scoreboard players operation #err train.tmp -= #spacing train.const
+	eq #sp train.tmp = (#vx train.tmp * #dx train.tmp + #vz train.tmp * #dz train.tmp) / #len train.tmp
+	eq #err train.tmp = #len train.tmp - #spacing train.const
 	# A follower more than a block back may run faster than a cart usually does, to close a stretch before the chain gives
 	scoreboard players set #fcap train.tmp <%u(0.45)%>
 	execute if score #err train.tmp matches <%u(1)%>.. run scoreboard players set #fcap train.tmp <%u(0.65)%>
@@ -101,7 +86,7 @@ function tick {
 	scoreboard players operation #err train.tmp /= #100 train.const
 	scoreboard players operation #sp train.tmp += #err train.tmp
 	scoreboard players operation #sp train.tmp < #fcap train.tmp
-	execute if score #sp train.tmp matches ..-<%u(0.3)%> run scoreboard players set #sp train.tmp -<%u(0.3)%>
+	floor #sp train.tmp -<%u(0.3)%>
 
 	# On a detour the chord says nothing about which way along the track to go
 	execute if score #detour train.tmp matches 1 run function train:follow/detour
@@ -114,12 +99,8 @@ function tick {
 	execute if block ~ ~ ~ minecraft:powered_rail[powered=false] run function train:follow/brake_comp
 
 	# Motion is the unit heading times the speed
-	scoreboard players operation #mx train.tmp = #dx train.tmp
-	scoreboard players operation #mx train.tmp *= #sp train.tmp
-	scoreboard players operation #mx train.tmp /= #len train.tmp
-	scoreboard players operation #mz train.tmp = #dz train.tmp
-	scoreboard players operation #mz train.tmp *= #sp train.tmp
-	scoreboard players operation #mz train.tmp /= #len train.tmp
+	eq #mx train.tmp = #dx train.tmp * #sp train.tmp / #len train.tmp
+	eq #mz train.tmp = #dz train.tmp * #sp train.tmp / #len train.tmp
 
 	# Within 0.3 blocks the heading means nothing and writing it would cancel vanilla's push between carts, so motion is left alone.
 	# What is written is remembered for a transit, see lost, and what isn't is not
@@ -127,16 +108,15 @@ function tick {
 
 	# Furnace followers burn fuel and push along their own PushX and PushZ, which fights the controller.
 	# Only written when something is set, NBT writes every tick aren't free
-	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {Fuel:0s} run data modify entity @s Fuel set value 0s
-	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {PushX:0.0d,PushZ:0.0d} run data merge entity @s {PushX:0.0d,PushZ:0.0d}
+	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {Fuel:0s} run data merge entity @s {Fuel:0s,PushX:0.0d,PushZ:0.0d}
 }
 
 # As a follower, #mx #mz the Motion to write, remembered for a transit
 function write {
-	scoreboard players operation @s train.lmx = #mx train.tmp
-	scoreboard players operation @s train.lmz = #mz train.tmp
-	execute store result entity @s Motion[0] double <%1 / UNIT%> run scoreboard players get #mx train.tmp
-	execute store result entity @s Motion[2] double <%1 / UNIT%> run scoreboard players get #mz train.tmp
+	REPEAT (['x', 'z']) as a {
+		scoreboard players operation @s train.lm<%a%> = #m<%a%> train.tmp
+		execute store result entity @s Motion[<%a == 'x' ? 0 : 2%>] double <%1 / UNIT%> run scoreboard players get #m<%a%> train.tmp
+	}
 }
 
 # As a follower, at it, after the gap length. Sets #blocked train.tmp to 1 when another cart stands on the line to the leader, between the two
@@ -153,8 +133,7 @@ function blocked {
 	scoreboard players operation #keep train.tmp = #len train.tmp
 	function train:follow/sqrt
 	function train:follow/sqrt
-	scoreboard players operation #lim train.tmp = #len train.tmp
-	scoreboard players remove #lim train.tmp <%u(1)%>
+	eq #lim train.tmp = #len train.tmp - <%u(1)%>
 	execute as @e[type=#train:carts,tag=train.follower,distance=0.01..8] if score @s train.prev = #self train.tmp run function train:follow/between
 	scoreboard players operation #len train.tmp = #keep train.tmp
 }
@@ -164,25 +143,16 @@ function blocked {
 # within 1.5 blocks of the follower's height. Closer than a block to either end it overlaps that cart, which carts do for a while after
 # a portal, and that is a pile and not in the way. A cart above or below is on another level
 function between {
-	execute store result score #oy train.tmp run data get entity @s Pos[1] <%UNIT%>
+	data modify storage train:tmp pos set from entity @s Pos
+	execute store result score #oy train.tmp run data get storage train:tmp pos[1] <%UNIT%>
 	scoreboard players operation #oy train.tmp -= #fy train.tmp
 	execute unless score #oy train.tmp matches -<%u(1.5) - 1%>..<%u(1.5) - 1%> run return 0
-	execute store result score #ox train.tmp run data get entity @s Pos[0] <%UNIT%>
-	execute store result score #oz train.tmp run data get entity @s Pos[2] <%UNIT%>
+	execute store result score #ox train.tmp run data get storage train:tmp pos[0] <%UNIT%>
+	execute store result score #oz train.tmp run data get storage train:tmp pos[2] <%UNIT%>
 	scoreboard players operation #ox train.tmp -= #fx train.tmp
 	scoreboard players operation #oz train.tmp -= #fz train.tmp
-	scoreboard players operation #along train.tmp = #ox train.tmp
-	scoreboard players operation #along train.tmp *= #dx train.tmp
-	scoreboard players operation #q train.tmp = #oz train.tmp
-	scoreboard players operation #q train.tmp *= #dz train.tmp
-	scoreboard players operation #along train.tmp += #q train.tmp
-	scoreboard players operation #along train.tmp /= #len train.tmp
-	scoreboard players operation #across train.tmp = #ox train.tmp
-	scoreboard players operation #across train.tmp *= #dz train.tmp
-	scoreboard players operation #q train.tmp = #oz train.tmp
-	scoreboard players operation #q train.tmp *= #dx train.tmp
-	scoreboard players operation #across train.tmp -= #q train.tmp
-	scoreboard players operation #across train.tmp /= #len train.tmp
+	eq #along train.tmp = (#ox train.tmp * #dx train.tmp + #oz train.tmp * #dz train.tmp) / #len train.tmp
+	eq #across train.tmp = (#ox train.tmp * #dz train.tmp - #oz train.tmp * #dx train.tmp) / #len train.tmp
 	execute if score #along train.tmp >= #end train.const if score #along train.tmp < #lim train.tmp if score #across train.tmp matches -<%u(0.7) - 1%>..<%u(0.7) - 1%> run scoreboard players set #blocked train.tmp 1
 }
 
@@ -210,7 +180,7 @@ function align {
 	execute if score @s train.cdir matches 3 run scoreboard players operation #pp train.tmp = #dx train.tmp
 	execute if score @s train.cdir matches 4 run scoreboard players operation #ce train.tmp -= #dx train.tmp
 	execute if score @s train.cdir matches 4 run scoreboard players operation #pp train.tmp = #dz train.tmp
-	execute if score #pp train.tmp matches ..-1 run scoreboard players operation #pp train.tmp *= #-1 train.const
+	abs #pp train.tmp
 	# Across times 5 against along times 3, 0.6 as a ratio
 	scoreboard players set #t train.tmp 5
 	scoreboard players operation #t train.tmp *= #pp train.tmp
@@ -229,10 +199,8 @@ function align {
 # of the smaller, and a catch up toward the spacing along the path gap, 0.1 at most, never backward. Heading is the way the rails leave
 # the follower's block toward the leader, written as a unit step so the Motion below is that direction times the speed
 function detour {
-	scoreboard players operation #ax train.tmp = #vx train.tmp
-	execute if score #ax train.tmp matches ..-1 run scoreboard players operation #ax train.tmp *= #-1 train.const
-	scoreboard players operation #az train.tmp = #vz train.tmp
-	execute if score #az train.tmp matches ..-1 run scoreboard players operation #az train.tmp *= #-1 train.const
+	abs #ax train.tmp #vx train.tmp
+	abs #az train.tmp #vz train.tmp
 	scoreboard players operation #sp train.tmp = #ax train.tmp
 	scoreboard players operation #sp train.tmp > #az train.tmp
 	scoreboard players operation #t train.tmp = #ax train.tmp
@@ -299,16 +267,19 @@ function lost {
 # is about 8 blocks at 0.4, a portal 2 blocks ahead is reached in a handful. An unpowered powered rail halves speed, so as in tick it is
 # asked for double. A powered one is not compensated, the extra 0.06 only carries the cart further in
 function coast {
-	scoreboard players operation #mx train.tmp = @s train.lmx
-	scoreboard players operation #mz train.tmp = @s train.lmz
+	REPEAT (['x', 'z']) as a {
+		scoreboard players operation #m<%a%> train.tmp = @s train.lm<%a%>
+	}
 	execute if block ~ ~ ~ minecraft:powered_rail[powered=false] run function train:follow/coast_brake
-	execute store result entity @s Motion[0] double <%1 / UNIT%> run scoreboard players get #mx train.tmp
-	execute store result entity @s Motion[2] double <%1 / UNIT%> run scoreboard players get #mz train.tmp
+	REPEAT (['x', 'z']) as a {
+		execute store result entity @s Motion[<%a == 'x' ? 0 : 2%>] double <%1 / UNIT%> run scoreboard players get #m<%a%> train.tmp
+	}
 }
 
 function coast_brake {
-	scoreboard players operation #mx train.tmp += #mx train.tmp
-	scoreboard players operation #mz train.tmp += #mz train.tmp
+	REPEAT (['x', 'z']) as a {
+		scoreboard players operation #m<%a%> train.tmp += #m<%a%> train.tmp
+	}
 }
 
 # As a follower with a wait running, after the chain display. Two carts out of a portal at one spot are sorted by vanilla's shove, which has no
@@ -334,7 +305,7 @@ function relink {
 	# The coast speed stops here. A follower that lands on its leader inside the deadband gets no Motion written, and would carry the
 	# coast straight through it
 	data modify entity @s Motion set value [0.0d,0.0d,0.0d]
-	execute if entity @e[tag=train.lead_now,distance=..1.5] run scoreboard players set @s train.wait 40
+	execute if entity @e[type=#train:carts,tag=train.lead_now,distance=..1.5] run scoreboard players set @s train.wait 40
 	function train:chain/seen
 	tag @s add train.hold_now
 	function train:chain/hop
@@ -344,7 +315,7 @@ function relink {
 
 # As a follower. The chain broke, it was stretched too far for too long, or another cart is in the way. The leader is still marked from the sample
 function snap {
-	tag @e[tag=train.lead_now] remove train.lead_now
+	tag @e[type=#train:carts,tag=train.lead_now] remove train.lead_now
 	function train:link/unlink
 }
 
@@ -352,23 +323,36 @@ function snap {
 function leader_sample {
 	scoreboard players set #found train.tmp 1
 	tag @s add train.lead_now
-	execute store result score #lx train.tmp run data get entity @s Pos[0] <%UNIT%>
-	execute store result score #ly train.tmp run data get entity @s Pos[1] <%UNIT%>
-	execute store result score #lz train.tmp run data get entity @s Pos[2] <%UNIT%>
+	data modify storage train:tmp pos set from entity @s Pos
+	execute store result score #lx train.tmp run data get storage train:tmp pos[0] <%UNIT%>
+	execute store result score #ly train.tmp run data get storage train:tmp pos[1] <%UNIT%>
+	execute store result score #lz train.tmp run data get storage train:tmp pos[2] <%UNIT%>
+	# Once per tick: a second follower of the same leader reuses the velocity the first one took, the stored position is already this tick's
+	execute if score @s train.lpt = #gen train.tmp run return run function train:follow/leader_cached
+	# A leader not sampled last tick has no history, so it starts at 0 and not at the jump from wherever it was left
+	scoreboard players operation #pg train.tmp = #gen train.tmp
+	scoreboard players remove #pg train.tmp 1
+	execute unless score @s train.lpt = #pg train.tmp run scoreboard players operation @s train.lpx = #lx train.tmp
+	execute unless score @s train.lpt = #pg train.tmp run scoreboard players operation @s train.lpz = #lz train.tmp
+	scoreboard players operation @s train.lpt = #gen train.tmp
 	# Real velocity is the position change since the last sample
-	scoreboard players add @s train.lpx 0
-	scoreboard players add @s train.lpz 0
 	scoreboard players operation #vx train.tmp = #lx train.tmp
 	scoreboard players operation #vx train.tmp -= @s train.lpx
 	scoreboard players operation #vz train.tmp = #lz train.tmp
 	scoreboard players operation #vz train.tmp -= @s train.lpz
 	scoreboard players operation @s train.lpx = #lx train.tmp
 	scoreboard players operation @s train.lpz = #lz train.tmp
-	# The first sample after linking has no history and teleports spike. Nothing real passes 0.45
-	execute if score #vx train.tmp matches <%u(0.45)%>.. run scoreboard players set #vx train.tmp <%u(0.45)%>
-	execute if score #vx train.tmp matches ..-<%u(0.45)%> run scoreboard players set #vx train.tmp -<%u(0.45)%>
-	execute if score #vz train.tmp matches <%u(0.45)%>.. run scoreboard players set #vz train.tmp <%u(0.45)%>
-	execute if score #vz train.tmp matches ..-<%u(0.45)%> run scoreboard players set #vz train.tmp -<%u(0.45)%>
+	# A teleport between two samples spikes. Nothing real passes 0.45
+	clamp #vx train.tmp -<%u(0.45)%> <%u(0.45)%>
+	clamp #vz train.tmp -<%u(0.45)%> <%u(0.45)%>
+	scoreboard players operation @s train.lvx = #vx train.tmp
+	scoreboard players operation @s train.lvz = #vz train.tmp
+}
+
+# As the leader cart, already sampled this tick
+function leader_cached {
+	scoreboard players operation #vx train.tmp = @s train.lvx
+	scoreboard players operation #vz train.tmp = @s train.lvz
 }
 
 # One newton step, #len = (#len + #dsq / #len) / 2
@@ -393,4 +377,20 @@ function boost_comp {
 # A follower keeps crawling through and the head never feels it
 function brake_comp {
 	scoreboard players operation #sp train.tmp += #sp train.tmp
+}
+
+# Ticks in a row a follower's gap has been at the break distance, a follower's rails to its leader as exit direction plus 1, units of path and 1
+# on a detour, and the last position of a leader, its tick stamp and the velocity cached for its other followers
+function load minecraft:load {
+	REPEAT (objectives.follow) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
+}
+
+# Removes this module's objectives and tags
+function uninstall train:uninstall {
+	tag @e[type=#train:carts] remove train.lead_now
+	REPEAT (objectives.follow) as o {
+		scoreboard objectives remove train.<%o%>
+	}
 }
