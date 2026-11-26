@@ -77,6 +77,8 @@ function unlink {
 	scoreboard players reset @s train.strain
 	scoreboard players reset @s train.lost
 	scoreboard players reset @s train.wait
+	scoreboard players reset @s train.lmx
+	scoreboard players reset @s train.lmz
 	scoreboard players reset @s train.cdir
 	scoreboard players reset @s train.cgap
 	scoreboard players reset @s train.cdet

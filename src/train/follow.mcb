@@ -48,6 +48,7 @@ function tick {
 	scoreboard players operation #old train.tmp -= #len train.tmp
 	execute if score #old train.tmp matches <%u(0.03)%>.. run scoreboard players set #closing train.tmp 1
 	execute if score #len train.tmp matches <%u(5)%>.. if score #closing train.tmp matches 0 run scoreboard players add @s train.strain 1
+	execute if score #len train.tmp matches <%u(5)%>.. if score #closing train.tmp matches 1 if score @s train.strain matches 1.. run scoreboard players remove @s train.strain 1
 	execute unless score #len train.tmp matches <%u(5)%>.. run scoreboard players set @s train.strain 0
 	execute if score @s train.strain matches 5.. run return run function train:follow/snap
 
@@ -97,15 +98,15 @@ function tick {
 	scoreboard players operation #err train.tmp = #len train.tmp
 	scoreboard players operation #err train.tmp -= #spacing train.const
 	# A follower more than a block back may run faster than a cart usually does, to close a stretch before the chain gives
-	scoreboard players set #cap train.tmp <%u(0.45)%>
-	execute if score #err train.tmp matches <%u(1)%>.. run scoreboard players set #cap train.tmp <%u(0.65)%>
+	scoreboard players set #fcap train.tmp <%u(0.45)%>
+	execute if score #err train.tmp matches <%u(1)%>.. run scoreboard players set #fcap train.tmp <%u(0.65)%>
 	# Too close backs off 2.5x harder than too far catches up
 	scoreboard players set #gain train.tmp 20
 	execute if score #err train.tmp matches ..-1 run scoreboard players set #gain train.tmp 50
 	scoreboard players operation #err train.tmp *= #gain train.tmp
 	scoreboard players operation #err train.tmp /= #100 train.const
 	scoreboard players operation #sp train.tmp += #err train.tmp
-	scoreboard players operation #sp train.tmp < #cap train.tmp
+	scoreboard players operation #sp train.tmp < #fcap train.tmp
 	execute if score #sp train.tmp matches ..-<%u(0.3)%> run scoreboard players set #sp train.tmp -<%u(0.3)%>
 
 	# On a detour the chord says nothing about which way along the track to go
@@ -128,15 +129,20 @@ function tick {
 
 	# Within 0.3 blocks the heading means nothing and writing it would cancel vanilla's push between carts, so motion is left alone.
 	# What is written is remembered for a transit, see lost, and what isn't is not
-	execute unless score #dsq train.tmp matches ..<%u(0.3) ** 2 - 1%> run scoreboard players operation @s train.lmx = #mx train.tmp
-	execute unless score #dsq train.tmp matches ..<%u(0.3) ** 2 - 1%> run scoreboard players operation @s train.lmz = #mz train.tmp
-	execute unless score #dsq train.tmp matches ..<%u(0.3) ** 2 - 1%> store result entity @s Motion[0] double <%1 / UNIT%> run scoreboard players get #mx train.tmp
-	execute unless score #dsq train.tmp matches ..<%u(0.3) ** 2 - 1%> store result entity @s Motion[2] double <%1 / UNIT%> run scoreboard players get #mz train.tmp
+	execute unless score #dsq train.tmp matches ..<%u(0.3) ** 2 - 1%> run function train:follow/write
 
 	# Furnace followers burn fuel and push along their own PushX and PushZ, which fights the controller.
 	# Only written when something is set, NBT writes every tick aren't free
 	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {Fuel:0s} run data modify entity @s Fuel set value 0s
 	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {PushX:0.0d,PushZ:0.0d} run data merge entity @s {PushX:0.0d,PushZ:0.0d}
+}
+
+# As a follower, #mx #mz the Motion to write, remembered for a transit
+function write {
+	scoreboard players operation @s train.lmx = #mx train.tmp
+	scoreboard players operation @s train.lmz = #mz train.tmp
+	execute store result entity @s Motion[0] double <%1 / UNIT%> run scoreboard players get #mx train.tmp
+	execute store result entity @s Motion[2] double <%1 / UNIT%> run scoreboard players get #mz train.tmp
 }
 
 # As a follower, at it, with the leader marked from the sample
@@ -207,7 +213,7 @@ function detour {
 	execute if score #e2 train.tmp matches <%u(1)%>.. run scoreboard players set #ecap train.tmp <%u(0.25)%>
 	scoreboard players operation #err train.tmp < #ecap train.tmp
 	scoreboard players operation #sp train.tmp += #err train.tmp
-	scoreboard players operation #sp train.tmp < #cap train.tmp
+	scoreboard players operation #sp train.tmp < #fcap train.tmp
 	scoreboard players set #dx train.tmp 0
 	scoreboard players set #dz train.tmp 0
 	execute if score @s train.cdir matches 1 run scoreboard players set #dz train.tmp -1
