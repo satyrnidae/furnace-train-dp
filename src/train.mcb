@@ -56,6 +56,8 @@ function load minecraft:load {
 	scoreboard players set #100 train.const 100
 	scoreboard players set #unit train.const <%UNIT%>
 	scoreboard players set #spacing train.const <%u(2)%>
+	# How far from either end of a chain a cart has to be to count as in the way, see follow.mcb
+	scoreboard players set #end train.const <%u(0.5)%>
 	scoreboard players set #chunk train.const <%16 * UNIT%>
 	# Collision avoidance. Period in ticks between traces, reach in blocks, stop gap and hard hit speed in units, #10 is the cap divisor
 	scoreboard players set #period train.const 20
