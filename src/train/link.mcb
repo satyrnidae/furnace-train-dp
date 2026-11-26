@@ -3,6 +3,7 @@
 
 import ../../scale.js
 import ../objectives.js
+import ../text/link.js
 
 # As the player, with the clicked cart tagged train.target
 function use {
@@ -23,7 +24,7 @@ function link {
 # As the player. First click picks the leader
 function first {
 	scoreboard players operation @s train.sel = @e[type=#train:carts,tag=train.target,limit=1] train.id
-	title @s[tag=!global.ignore.gui] actionbar {text:"Coupler: click the cart behind it"}
+	title @s[tag=!global.ignore.gui] actionbar <%linkText.first%>
 	tag @e[type=#train:carts,tag=train.target] remove train.target
 }
 
@@ -36,8 +37,8 @@ function second {
 	execute if score #ok train.tmp matches 1 run function train:chain/spawn
 	tag @e[type=#train:carts,tag=train.target] remove train.target
 	execute if score #ok train.tmp matches 1 run clear @s[gamemode=!creative] #train:couplers 1
-	execute if score #ok train.tmp matches 1 run title @s[tag=!global.ignore.gui] actionbar {text:"Coupled"}
-	execute if score #ok train.tmp matches 0 run title @s[tag=!global.ignore.gui] actionbar {text:"Coupler: cancelled"}
+	execute if score #ok train.tmp matches 1 run title @s[tag=!global.ignore.gui] actionbar <%linkText.coupled%>
+	execute if score #ok train.tmp matches 0 run title @s[tag=!global.ignore.gui] actionbar <%linkText.cancelled%>
 }
 
 # As the follower cart. The same cart clicked twice cancels
@@ -91,8 +92,8 @@ function uncouple {
 	execute if score #cut train.tmp matches 0 as @e[type=#train:carts,tag=train.follower] if score @s train.prev = #cid train.tmp run function train:link/unlink
 	scoreboard players set #nodrop train.tmp 0
 	tag @e[type=#train:carts,tag=train.target] remove train.target
-	execute if score #cut train.tmp matches 1 run title @s[tag=!global.ignore.gui] actionbar {text:"Uncoupled"}
-	execute if score #cut train.tmp matches 0 run title @s[tag=!global.ignore.gui] actionbar {text:"Nothing to uncouple"}
+	execute if score #cut train.tmp matches 1 run title @s[tag=!global.ignore.gui] actionbar <%linkText.uncoupled%>
+	execute if score #cut train.tmp matches 0 run title @s[tag=!global.ignore.gui] actionbar <%linkText.nothing%>
 }
 
 # As a follower cart. Leader gone, out of range, or cut with shears

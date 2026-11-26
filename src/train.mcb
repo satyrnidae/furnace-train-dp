@@ -11,6 +11,8 @@
 import ../scale.js
 import objectives.js
 import chains.js
+import text/advancement.js
+import text/uninstall.js
 
 #region Setup
 function load minecraft:load {
@@ -49,7 +51,7 @@ function load minecraft:load {
 # Removes everything the pack created, then disables it. Run as an operator: /function train:uninstall
 # Carts stay as they are, unlinked. Chunks the pack forceloaded are released, except those that were forced before it.
 function uninstall {
-	tellraw @s {text:"Furnace Minecart Trains: uninstalling"}
+	tellraw @s <%uninstallText.start%>
 
 	# Each module removes its own objectives, tags and entities through this tag
 	function #train:uninstall
@@ -65,8 +67,8 @@ function uninstall {
 
 	# The result has to be read after the objectives are gone, so it goes in a storage value
 	execute store success storage train:tmp uninstalled byte 1 run datapack disable "file/<%config.packName%>"
-	execute unless data storage train:tmp {uninstalled:1b} run tellraw @s {text:"Remove the data pack folder or zip from the world's datapacks folder, it could not be disabled by name", color:"yellow"}
-	execute if data storage train:tmp {uninstalled:1b} run tellraw @s {text:"Furnace Minecart Trains: uninstalled", color:"green"}
+	execute unless data storage train:tmp {uninstalled:1b} run tellraw @s <%uninstallText.manual%>
+	execute if data storage train:tmp {uninstalled:1b} run tellraw @s <%uninstallText.done%>
 	data remove storage train:tmp uninstalled
 }
 
@@ -101,8 +103,8 @@ function tick minecraft:tick {
 # The pack's node of the datapack advancement tree, under the author node of src/global.mcb
 advancement root {
 	"display": {
-		"title": {"translate": "train.advancement.root.title", "fallback": "Furnace Minecart Trains", "color": "gold"},
-		"description": {"translate": "train.advancement.root.description", "fallback": "Chain furnace minecarts into self-driving trains!", "color": "yellow"},
+		"title": <%advText.rootTitle%>,
+		"description": <%advText.rootDescription%>,
 		"icon": {"id": "minecraft:furnace_minecart"},
 		"show_toast": false,
 		"announce_to_chat": false

@@ -22,6 +22,10 @@ Run `/function train:uninstall` as an operator. It breaks the chains, releases t
 
 Follows the [datapack conventions](https://mc-datapacks.github.io/en/): the pack advancement sits under `global:satyrnidae/author`, forceloaded chunks carry a `global.forceload` marker, and carts tagged `global.ignore`, `global.ignore.pos` or `global.ignore.kill`, and players tagged `global.ignore.gui`, are left alone.
 
+## Translations
+
+Every chat, action bar and advancement string is defined in `src/text/*.js` as a `translate` component with its English as the fallback, so the data pack alone reads fine. The optional resource pack in `resourcepack/` carries the lang files. Zip its contents, add it to the client, and add a `<lang>.json` per language under `resourcepack/assets/train/lang/`. `npm run lang:check` fails when `src/text` and `en_us.json` drift apart, and `npm test` runs it first.
+
 ## AI Usage Disclosure
 
 This datapack's code was developed with a big ol' plagiarism machine (Claude Code by Anthropic). No art asset files were generated using the LLM.
