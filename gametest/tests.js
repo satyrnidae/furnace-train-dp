@@ -75,6 +75,9 @@ const gametest = {
 		{ id: "t45_parallel_rails", steps: [[1, "t45/start"], [4, "t45/check"]] },
 		{ id: "t46_other_level", steps: [[1, "t46/start"], [4, "t46/check"]] },
 		{ id: "t47_row_stays_coupled", steps: [[1, "t47/start"], [101, "t47/check"]] },
+		{ id: "t37_chunkload_off", steps: [[1, "chunk/off_start"], [60, "chunk/off_check"], [61, "chunk/on"], [90, "chunk/claimed"], [91, "chunk/off"], [120, "chunk/released"]] },
+		// Last on purpose, running the load function sets the sweep grace again so nothing after this can count on a sweep. New tests go above it
+		{ id: "t38_chunkload_reload", steps: [[1, "chunk/reload_unset"], [2, "chunk/reload_kept"], [3, "chunk/reload_done"]] },
 	],
 };
 
