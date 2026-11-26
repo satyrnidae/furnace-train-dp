@@ -71,6 +71,10 @@ const gametest = {
 		{ id: "t35_no_bunching_stop", steps: [[1, "t35/start"], ...gapWatch(400), [401, "t35/check"]] },
 		{ id: "t36_no_bunching_hairpin", steps: [[1, "t36/start"], ...gapWatch(440), [441, "t36/check"]] },
 		{ id: "t43_crossed_link", steps: [[1, "t43/start"], [40, "t43/mark"], [70, "t43/check"]] },
+		{ id: "t44_link_cycle", steps: [[1, "t44/run"]] },
+		{ id: "t45_parallel_rails", steps: [[1, "t45/start"], [4, "t45/check"]] },
+		{ id: "t46_other_level", steps: [[1, "t46/start"], [4, "t46/check"]] },
+		{ id: "t47_row_stays_coupled", steps: [[1, "t47/start"], [101, "t47/check"]] },
 	],
 };
 

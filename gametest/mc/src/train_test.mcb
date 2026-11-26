@@ -1173,6 +1173,8 @@ function t43/mark {
 	execute store result score #pc train_test run data get entity @e[tag=tt.c,limit=1] Pos[0] <%UNIT%>
 }
 function t43/check {
+	# The link is gone, not just a train that happens to be at rest
+	execute if entity @e[tag=tt.a,tag=train.follower] run scoreboard players set #ok train_test 0
 	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
 	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
 	execute unless entity @e[tag=tt.c] run scoreboard players set #ok train_test 0
@@ -1185,6 +1187,85 @@ function t43/check {
 	execute unless score #qa train_test matches -<%u(2)%>..<%u(2)%> run scoreboard players set #ok train_test 0
 	execute unless score #qb train_test matches -<%u(2)%>..<%u(2)%> run scoreboard players set #ok train_test 0
 	execute unless score #qc train_test matches -<%u(2)%>..<%u(2)%> run scoreboard players set #ok train_test 0
+}
+
+# t44 a link that would close a loop is refused. b follows a and c follows b, then a following c is a loop of three and a following b is one
+# of two. Both are refused and a stays free
+function t44/run {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~20 ~ ~ {Tags:["tt","tt.a"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~22 ~ ~ {Tags:["tt","tt.b"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~24 ~ ~ {Tags:["tt","tt.c"]}
+	execute as @e[tag=tt.a,limit=1] run function train:link/assign_id
+	execute as @e[tag=tt.b,limit=1] run function train:link/assign_id
+	execute as @e[tag=tt.c,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.a,limit=1] train.id
+	execute as @e[tag=tt.b,limit=1] run function train:link/apply
+	scoreboard players operation #lead train.tmp = @e[tag=tt.b,limit=1] train.id
+	execute as @e[tag=tt.c,limit=1] run function train:link/apply
+	execute unless entity @e[tag=tt.b,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.c,tag=train.follower] run scoreboard players set #ok train_test 0
+	scoreboard players operation #lead train.tmp = @e[tag=tt.c,limit=1] train.id
+	execute as @e[tag=tt.a,limit=1] run function train:link/apply
+	scoreboard players operation #lead train.tmp = @e[tag=tt.b,limit=1] train.id
+	execute as @e[tag=tt.a,limit=1] run function train:link/apply
+	execute if entity @e[tag=tt.a,tag=train.follower] run scoreboard players set #ok train_test 0
+}
+
+# t45 three rails a block apart, a leader on the first, its follower on the third and an unlinked cart on the middle one, level with the line
+# between them. It is not part of the train, so the chain stays. Four ticks in, before the follower's pull along the rail has gone far
+function t45/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~ ~1 ~44 ~ ~2 minecraft:rail[shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~20 ~ ~ {Tags:["tt","tt.l"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~20 ~ ~1 {Tags:["tt","tt.m"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~20 ~ ~2 {Tags:["tt","tt.f"]}
+	execute as @e[tag=tt.l,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.l,limit=1] train.id
+	execute as @e[tag=tt.f,limit=1] run function train:link/apply
+}
+function t45/check {
+	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+}
+
+# t46 a cart that follows the follower and sits between it and the leader, on a rail 3 blocks up. Another level, so the chain stays
+function t46/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	execute at @e[tag=tt.origin,limit=1] run fill ~14 ~2 ~ ~24 ~2 ~ minecraft:stone
+	execute at @e[tag=tt.origin,limit=1] run fill ~14 ~3 ~ ~24 ~3 ~ minecraft:rail[shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~20 ~ ~ {Tags:["tt","tt.l"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~18 ~ ~ {Tags:["tt","tt.f"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~19 ~3 ~ {Tags:["tt","tt.m"]}
+	execute as @e[tag=tt.l,limit=1] run function train:link/assign_id
+	execute as @e[tag=tt.f,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.l,limit=1] train.id
+	execute as @e[tag=tt.f,limit=1] run function train:link/apply
+	scoreboard players operation #lead train.tmp = @e[tag=tt.f,limit=1] train.id
+	execute as @e[tag=tt.m,limit=1] run function train:link/apply
+}
+function t46/check {
+	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+}
+
+# t47 a train in a row stays coupled while it runs. The cart behind a follower is never in the way of the line to its leader
+function t47/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	function train_test:lib/head
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~1 ~ ~ {Tags:["tt","tt.f"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~-1 ~ ~ {Tags:["tt","tt.g"]}
+	function train_test:lib/couple_three
+}
+function t47/check {
+	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.g,tag=train.follower] run scoreboard players set #ok train_test 0
 }
 #endregion
 
