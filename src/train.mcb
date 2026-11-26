@@ -13,10 +13,9 @@ import ../scale.js
 #region Setup
 function load minecraft:load {
 	# Per cart
-	scoreboard objectives add train.id dummy
-	scoreboard objectives add train.prev dummy
-	scoreboard objectives add train.sel dummy
-	scoreboard objectives add train.len dummy
+	REPEAT (['id', 'prev', 'sel', 'len']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
 	# Ticks in a row a follower's gap has been at the break distance
 	scoreboard objectives add train.strain dummy
 	# Portal transit, see follow.mcb. Ticks a follower has held for a leader in another dimension, and the Motion it last wrote
@@ -30,39 +29,35 @@ function load minecraft:load {
 	scoreboard objectives add train.oy dummy
 	scoreboard objectives add train.oz dummy
 	# A follower's rails to its leader, see follow.mcb. Exit direction plus 1, units of path, and 1 while on a detour
-	scoreboard objectives add train.cdir dummy
-	scoreboard objectives add train.cgap dummy
-	scoreboard objectives add train.cdet dummy
+	REPEAT (['cdir', 'cgap', 'cdet']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
 	# Last position of a leader, its speed is the change since the last sample, see follow.mcb
-	scoreboard objectives add train.lpx dummy
-	scoreboard objectives add train.lpz dummy
+	REPEAT (['lpx', 'lpz']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
 	# Leader sample, once per tick however many followers it has: tick stamp and cached velocity, see follow.mcb
-	scoreboard objectives add train.lpt dummy
-	scoreboard objectives add train.lvx dummy
-	scoreboard objectives add train.lvz dummy
-	scoreboard objectives add train.halt dummy
-	scoreboard objectives add train.smx dummy
-	scoreboard objectives add train.smz dummy
-	scoreboard objectives add train.spx dummy
-	scoreboard objectives add train.spz dummy
+	REPEAT (['lpt', 'lvx', 'lvz']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
+	# Held head, saved motion and push, see head.mcb
+	REPEAT (['halt', 'smx', 'smz', 'spx', 'spz']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
 	# Furnace carts, see sample.mcb and avoid.mcb. Position last tick, velocity, last heading 0 N 1 E 2 S 3 W, gap to the next cart along the rail, tick of the last trace
-	scoreboard objectives add train.ppx dummy
-	scoreboard objectives add train.ppz dummy
-	scoreboard objectives add train.svx dummy
-	scoreboard objectives add train.svz dummy
+	REPEAT (['ppx', 'ppz', 'svx', 'svz']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
 	# The velocity of the tick before, the crash check reads both, see crash.mcb
-	scoreboard objectives add train.pvx dummy
-	scoreboard objectives add train.pvz dummy
-	scoreboard objectives add train.dir dummy
-	scoreboard objectives add train.gap dummy
-	scoreboard objectives add train.chk dummy
+	REPEAT (['pvx', 'pvz', 'dir', 'gap', 'chk']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
 	# Heading the last trace looked along, a different heading means an immediate trace. Reset by a resume for the same reason
 	scoreboard objectives add train.tdir dummy
 	# Per chunk, fake players named c<dimension>_<x>_<z>
-	scoreboard objectives add train.cgen dummy
-	scoreboard objectives add train.cpres dummy
-	scoreboard objectives add train.tmp dummy
-	scoreboard objectives add train.const dummy
+	REPEAT (['cgen', 'cpres', 'tmp', 'const']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
 	scoreboard players set #2 train.const 2
 	scoreboard players set #-1 train.const -1
 	scoreboard players set #16 train.const 16

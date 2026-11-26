@@ -1,3 +1,4 @@
+import ../math.mcbt
 import ../../scale.js
 
 # Follower control. Each follower copies the speed of the cart ahead along the line to it, plus a correction toward 2 blocks of
@@ -101,7 +102,7 @@ function tick {
 	scoreboard players operation #err train.tmp /= #100 train.const
 	scoreboard players operation #sp train.tmp += #err train.tmp
 	scoreboard players operation #sp train.tmp < #fcap train.tmp
-	execute if score #sp train.tmp matches ..-<%u(0.3)%> run scoreboard players set #sp train.tmp -<%u(0.3)%>
+	floor #sp train.tmp -<%u(0.3)%>
 
 	# On a detour the chord says nothing about which way along the track to go
 	execute if score #detour train.tmp matches 1 run function train:follow/detour
@@ -210,7 +211,7 @@ function align {
 	execute if score @s train.cdir matches 3 run scoreboard players operation #pp train.tmp = #dx train.tmp
 	execute if score @s train.cdir matches 4 run scoreboard players operation #ce train.tmp -= #dx train.tmp
 	execute if score @s train.cdir matches 4 run scoreboard players operation #pp train.tmp = #dz train.tmp
-	execute if score #pp train.tmp matches ..-1 run scoreboard players operation #pp train.tmp *= #-1 train.const
+	abs #pp train.tmp
 	# Across times 5 against along times 3, 0.6 as a ratio
 	scoreboard players set #t train.tmp 5
 	scoreboard players operation #t train.tmp *= #pp train.tmp
@@ -229,10 +230,8 @@ function align {
 # of the smaller, and a catch up toward the spacing along the path gap, 0.1 at most, never backward. Heading is the way the rails leave
 # the follower's block toward the leader, written as a unit step so the Motion below is that direction times the speed
 function detour {
-	scoreboard players operation #ax train.tmp = #vx train.tmp
-	execute if score #ax train.tmp matches ..-1 run scoreboard players operation #ax train.tmp *= #-1 train.const
-	scoreboard players operation #az train.tmp = #vz train.tmp
-	execute if score #az train.tmp matches ..-1 run scoreboard players operation #az train.tmp *= #-1 train.const
+	abs #ax train.tmp #vx train.tmp
+	abs #az train.tmp #vz train.tmp
 	scoreboard players operation #sp train.tmp = #ax train.tmp
 	scoreboard players operation #sp train.tmp > #az train.tmp
 	scoreboard players operation #t train.tmp = #ax train.tmp
@@ -371,10 +370,8 @@ function leader_sample {
 	scoreboard players operation @s train.lpx = #lx train.tmp
 	scoreboard players operation @s train.lpz = #lz train.tmp
 	# A teleport between two samples spikes. Nothing real passes 0.45
-	execute if score #vx train.tmp matches <%u(0.45)%>.. run scoreboard players set #vx train.tmp <%u(0.45)%>
-	execute if score #vx train.tmp matches ..-<%u(0.45)%> run scoreboard players set #vx train.tmp -<%u(0.45)%>
-	execute if score #vz train.tmp matches <%u(0.45)%>.. run scoreboard players set #vz train.tmp <%u(0.45)%>
-	execute if score #vz train.tmp matches ..-<%u(0.45)%> run scoreboard players set #vz train.tmp -<%u(0.45)%>
+	clamp #vx train.tmp -<%u(0.45)%> <%u(0.45)%>
+	clamp #vz train.tmp -<%u(0.45)%> <%u(0.45)%>
 	scoreboard players operation @s train.lvx = #vx train.tmp
 	scoreboard players operation @s train.lvz = #vz train.tmp
 }

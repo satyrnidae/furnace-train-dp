@@ -1,3 +1,4 @@
+import ../math.mcbt
 # Furnace cart sampler. Every tick each furnace cart stores its position and the change since last tick as its velocity, in units
 # of a block per tick. A head also keeps its last heading. Crash detection reads these for every furnace cart, braking reads them for heads.
 # A cart that has just spawned has no previous position, it is initialized to the current one so its first velocity is 0.
@@ -40,10 +41,8 @@ function cart {
 
 	# Heading, heads only. Under 0.02 it keeps the old one, a parked head still knows which way it will leave
 	execute if entity @s[tag=train.follower] run return 0
-	scoreboard players operation #ax train.tmp = #vx train.tmp
-	execute if score #ax train.tmp matches ..-1 run scoreboard players operation #ax train.tmp *= #-1 train.const
-	scoreboard players operation #az train.tmp = #vz train.tmp
-	execute if score #az train.tmp matches ..-1 run scoreboard players operation #az train.tmp *= #-1 train.const
+	abs #ax train.tmp #vx train.tmp
+	abs #az train.tmp #vz train.tmp
 	scoreboard players operation #as train.tmp = #ax train.tmp
 	scoreboard players operation #as train.tmp += #az train.tmp
 	execute if score #as train.tmp matches ..<%u(0.06) - 1%> run return 0
@@ -51,7 +50,7 @@ function cart {
 	# diagonal and the two axes differ by rounding noise, and a plain tie break flipped the heading to the exit axis of the curve mid-corner
 	scoreboard players operation #diff train.tmp = #ax train.tmp
 	scoreboard players operation #diff train.tmp -= #az train.tmp
-	execute if score #diff train.tmp matches ..-1 run scoreboard players operation #diff train.tmp *= #-1 train.const
+	abs #diff train.tmp
 	scoreboard players operation #diff train.tmp *= #2 train.const
 	scoreboard players operation #diff train.tmp *= #2 train.const
 	execute unless score #diff train.tmp > #as train.tmp run return 0

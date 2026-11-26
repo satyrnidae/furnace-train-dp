@@ -1,3 +1,4 @@
+import ../math.mcbt
 # Look-ahead braking. A head, meaning a furnace cart that isn't a follower, traces the rail ahead once every #period ticks, slot picked by
 # its id so heads spread across the period, and remembers the path distance to the first foreign cart as train.gap. Every tick between
 # traces the gap is aged by the distance the head travelled, and a speed cap comes from it:
@@ -56,10 +57,8 @@ function age {
 	execute if score @s train.dir matches 3 if score @s train.svx matches 0.. run return 0
 	execute if score @s train.dir matches 2 if score @s train.svz matches ..0 run return 0
 	execute if score @s train.dir matches 0 if score @s train.svz matches 0.. run return 0
-	scoreboard players operation #ax train.tmp = @s train.svx
-	execute if score #ax train.tmp matches ..-1 run scoreboard players operation #ax train.tmp *= #-1 train.const
-	scoreboard players operation #az train.tmp = @s train.svz
-	execute if score #az train.tmp matches ..-1 run scoreboard players operation #az train.tmp *= #-1 train.const
+	abs #ax train.tmp @s train.svx
+	abs #az train.tmp @s train.svz
 	scoreboard players operation #big train.tmp = #ax train.tmp
 	scoreboard players operation #big train.tmp > #az train.tmp
 	scoreboard players operation #small train.tmp = #ax train.tmp
