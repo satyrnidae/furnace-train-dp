@@ -36,10 +36,12 @@ function scan_walk {
 
 # As a follower, at it
 function scan_visit {
+	scoreboard players operation @s train.sav = #cur train.tmp
 	execute if score @s train.lost matches 1.. run scoreboard players set #transit train.tmp 1
 	execute unless block ~ ~ ~ #minecraft:rails unless block ~ ~-1 ~ #minecraft:rails run scoreboard players set #derail train.tmp 1
 	scoreboard players operation #cur train.tmp = @s train.id
 	function train:chunks/scan_walk
+	scoreboard players operation #cur train.tmp = @s train.sav
 }
 
 function apply_walk {
@@ -48,9 +50,11 @@ function apply_walk {
 
 # As a follower, at it
 function apply_visit {
+	scoreboard players operation @s train.sav = #cur train.tmp
 	function train:chunks/touch_cart
 	scoreboard players operation #cur train.tmp = @s train.id
 	function train:chunks/apply_walk
+	scoreboard players operation #cur train.tmp = @s train.sav
 }
 
 # As a cart, at it. Refreshes every chunk its square touches. Positions are in units, see scale.js, and floor division by a chunk, 1024 of them, gives the chunk

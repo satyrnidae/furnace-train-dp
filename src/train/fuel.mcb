@@ -22,8 +22,10 @@ function walk {
 function visit {
 	execute if score #fed train.tmp matches 1 run return 0
 	execute if entity @s[type=minecraft:chest_minecart] run function train:fuel/take
+	scoreboard players operation @s train.sav = #cur train.tmp
 	scoreboard players operation #cur train.tmp = @s train.id
 	function train:fuel/walk
+	scoreboard players operation #cur train.tmp = @s train.sav
 }
 
 # As a chest cart. The first slot holding fuel gives up one item

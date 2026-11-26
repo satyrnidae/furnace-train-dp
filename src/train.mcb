@@ -36,6 +36,12 @@ function load minecraft:load {
 	# Last position of a leader, its speed is the change since the last sample, see follow.mcb
 	scoreboard objectives add train.lpx dummy
 	scoreboard objectives add train.lpz dummy
+	# Leader sample, once per tick however many followers it has: tick stamp and cached velocity, see follow.mcb
+	scoreboard objectives add train.lpt dummy
+	scoreboard objectives add train.lvx dummy
+	scoreboard objectives add train.lvz dummy
+	# The #cur of the parent while a train walk is inside a cart, so a sibling is compared against the right id
+	scoreboard objectives add train.sav dummy
 	scoreboard objectives add train.halt dummy
 	scoreboard objectives add train.smx dummy
 	scoreboard objectives add train.smz dummy

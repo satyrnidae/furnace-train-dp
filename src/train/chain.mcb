@@ -105,8 +105,8 @@ function apply {
 
 # As a follower cart. Removes its chain display and gives the chain back
 function kill {
-	scoreboard players operation #cid train.tmp = @s train.id
-	execute as @e[type=minecraft:block_display,tag=train.chain] if score @s train.id = #cid train.tmp run function train:chain/free
+	scoreboard players operation #kid train.tmp = @s train.id
+	execute as @e[type=minecraft:block_display,tag=train.chain] if score @s train.id = #kid train.tmp run function train:chain/free
 }
 
 # As a chain display. The chain breaks where it hangs, with a sound and a puff of item particles, and drops the chain item it was made

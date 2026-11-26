@@ -355,6 +355,14 @@ function leader_sample {
 	execute store result score #lx train.tmp run data get entity @s Pos[0] <%UNIT%>
 	execute store result score #ly train.tmp run data get entity @s Pos[1] <%UNIT%>
 	execute store result score #lz train.tmp run data get entity @s Pos[2] <%UNIT%>
+	# Once per tick: a second follower of the same leader reuses the velocity the first one took, the stored position is already this tick's
+	execute if score @s train.lpt = #gen train.tmp run return run function train:follow/leader_cached
+	# A leader not sampled last tick has no history, so it starts at 0 and not at the jump from wherever it was left
+	scoreboard players operation #pg train.tmp = #gen train.tmp
+	scoreboard players remove #pg train.tmp 1
+	execute unless score @s train.lpt = #pg train.tmp run scoreboard players operation @s train.lpx = #lx train.tmp
+	execute unless score @s train.lpt = #pg train.tmp run scoreboard players operation @s train.lpz = #lz train.tmp
+	scoreboard players operation @s train.lpt = #gen train.tmp
 	# Real velocity is the position change since the last sample
 	scoreboard players add @s train.lpx 0
 	scoreboard players add @s train.lpz 0
@@ -369,6 +377,14 @@ function leader_sample {
 	execute if score #vx train.tmp matches ..-<%u(0.45)%> run scoreboard players set #vx train.tmp -<%u(0.45)%>
 	execute if score #vz train.tmp matches <%u(0.45)%>.. run scoreboard players set #vz train.tmp <%u(0.45)%>
 	execute if score #vz train.tmp matches ..-<%u(0.45)%> run scoreboard players set #vz train.tmp -<%u(0.45)%>
+	scoreboard players operation @s train.lvx = #vx train.tmp
+	scoreboard players operation @s train.lvz = #vz train.tmp
+}
+
+# As the leader cart, already sampled this tick
+function leader_cached {
+	scoreboard players operation #vx train.tmp = @s train.lvx
+	scoreboard players operation #vz train.tmp = @s train.lvz
 }
 
 # One newton step, #len = (#len + #dsq / #len) / 2
