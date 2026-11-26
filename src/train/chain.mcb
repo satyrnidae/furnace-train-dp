@@ -35,11 +35,59 @@ function spawn {
 	tag @e[tag=train.new] remove train.new
 }
 
-# As a chain display. #cx #cy #cz is the midpoint and #len the gap, in units, see scale.js
-function apply {
+# As a follower, at it. Sets #seen train.tmp to 1 when its chain display is in the follower's dimension. A selector with a distance only
+# looks in the dimension it runs in, and @s[distance] is no use, it compares coordinates and nothing else
+function seen {
+	scoreboard players set #seen train.tmp 0
+	execute as @e[type=minecraft:block_display,tag=train.chain,distance=0..] if score @s train.id = #self train.tmp run scoreboard players set #seen train.tmp 1
+}
+
+# As a follower tagged train.hold_now, at it, after seen. A display in another dimension teleports to the follower, a Pos write can't change
+# dimension
+function hop {
+	execute if score #seen train.tmp matches 0 as @e[type=minecraft:block_display,tag=train.chain] if score @s train.id = #self train.tmp run tp @s @e[tag=train.hold_now,limit=1]
+}
+
+# As a chain display, at its follower tagged train.hold_now. The leader is in another dimension. Keeps its last transformation, so the chain
+# stays the length and facing it had, and hangs from the follower at the offset it had when the leader left. The offset is stored on the first
+# tick, #first, and #fx #fy #fz is the follower, in units. A display already in another dimension has no offset to measure and is put on
+# the follower
+function hold {
+	execute if score #first train.tmp matches 1 run function train:chain/hold_mark
+	execute if score #seen train.tmp matches 0 run tp @s @e[tag=train.hold_now,limit=1]
+	scoreboard players operation #cx train.tmp = #fx train.tmp
+	scoreboard players operation #cx train.tmp += @s train.ox
+	scoreboard players operation #cy train.tmp = #fy train.tmp
+	scoreboard players operation #cy train.tmp += @s train.oy
+	scoreboard players operation #cz train.tmp = #fz train.tmp
+	scoreboard players operation #cz train.tmp += @s train.oz
+	function train:chain/place
+}
+
+# As a chain display, on the first tick of a hold
+function hold_mark {
+	scoreboard players set @s train.ox 0
+	scoreboard players set @s train.oy 0
+	scoreboard players set @s train.oz 0
+	execute if score #seen train.tmp matches 0 run return 0
+	execute store result score @s train.ox run data get entity @s Pos[0] <%UNIT%>
+	execute store result score @s train.oy run data get entity @s Pos[1] <%UNIT%>
+	execute store result score @s train.oz run data get entity @s Pos[2] <%UNIT%>
+	scoreboard players operation @s train.ox -= #fx train.tmp
+	scoreboard players operation @s train.oy -= #fy train.tmp
+	scoreboard players operation @s train.oz -= #fz train.tmp
+}
+
+# As a chain display. Puts it at #cx #cy #cz, in units
+function place {
 	execute store result entity @s Pos[0] double <%1 / UNIT%> run scoreboard players get #cx train.tmp
 	execute store result entity @s Pos[1] double <%1 / UNIT%> run scoreboard players get #cy train.tmp
 	execute store result entity @s Pos[2] double <%1 / UNIT%> run scoreboard players get #cz train.tmp
+}
+
+# As a chain display. #cx #cy #cz is the midpoint and #len the gap, in units, see scale.js
+function apply {
+	function train:chain/place
 	# Yaw and pitch toward the leader, so local z runs along the link. Aimed from 0.4 lower, otherwise the raise over the cart base tilts it toward the leader's feet
 	execute at @s positioned ~ ~-0.4 ~ facing entity @e[tag=train.lead_now,limit=1] feet run tp @s ~ ~0.4 ~ ~ ~
 	# Stretched center to center, then trimmed to the gap minus 1, so each end sits 0.5 from its cart's center. That is the cart's back face

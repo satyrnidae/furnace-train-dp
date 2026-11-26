@@ -19,6 +19,16 @@ function load minecraft:load {
 	scoreboard objectives add train.len dummy
 	# Ticks in a row a follower's gap has been at the break distance
 	scoreboard objectives add train.strain dummy
+	# Portal transit, see follow.mcb. Ticks a follower has held for a leader in another dimension, and the Motion it last wrote
+	scoreboard objectives add train.lost dummy
+	scoreboard objectives add train.lmx dummy
+	scoreboard objectives add train.lmz dummy
+	# Ticks a follower that landed on its leader stays still, see follow.mcb
+	scoreboard objectives add train.wait dummy
+	# Per chain display, where it hangs from its follower while the leader is away, in units
+	scoreboard objectives add train.ox dummy
+	scoreboard objectives add train.oy dummy
+	scoreboard objectives add train.oz dummy
 	# A follower's rails to its leader, see follow.mcb. Exit direction plus 1, units of path, and 1 while on a detour
 	scoreboard objectives add train.cdir dummy
 	scoreboard objectives add train.cgap dummy
@@ -57,15 +67,16 @@ function load minecraft:load {
 	scoreboard players set #unit train.const <%UNIT%>
 	scoreboard players set #spacing train.const <%u(2)%>
 	# How far from either end of a chain a cart has to be to count as in the way, see follow.mcb
-	scoreboard players set #end train.const <%u(0.5)%>
+	scoreboard players set #end train.const <%u(1)%>
 	scoreboard players set #chunk train.const <%16 * UNIT%>
+	# Ticks a follower holds for a leader that went to another dimension, see follow.mcb
+	scoreboard players set #holdmax train.const 60
 	# Collision avoidance. Period in ticks between traces, reach in blocks, stop gap and hard hit speed in units, #10 is the cap divisor
 	scoreboard players set #period train.const 20
 	scoreboard players set #reach train.const 16
 	scoreboard players set #stop train.const <%u(2.5)%>
 	scoreboard players set #hit train.const <%u(0.1)%>
 	scoreboard players set #10 train.const 10
-	scoreboard players set #5 train.const 5
 	# Debug, 1 turns braking off so a head-on can be tested
 	scoreboard players set #noavoid train.const 0
 	# Chunk loading, 0 off and anything else on. Flip it with /scoreboard players set #chunkload train.const 0. Only set here when unset so a
