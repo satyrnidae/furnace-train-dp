@@ -1,4 +1,3 @@
-import ../math.mcbt
 # A head furnace on an unpowered powered rail coasts to the center of the rail block, stops there and holds. Powered again, it gets
 # its saved motion and push back. Fuel is never touched, it burns and can be topped up while stopped. Followers see a still leader and
 # stop with it, and a head at x.5 z.5 puts followers on block centers too.
@@ -6,6 +5,8 @@ import ../math.mcbt
 # scores in ten thousandths.
 
 import ../../scale.js
+import ../objectives.js
+import ../math.mcbt
 
 # As a head furnace that isn't a follower, at the head
 function rail {
@@ -163,7 +164,14 @@ function resume {
 
 # Halt state, saved motion and push
 function load minecraft:load {
-	REPEAT (['halt', 'smx', 'smz', 'spx', 'spz']) as o {
+	REPEAT (objectives.head) as o {
 		scoreboard objectives add train.<%o%> dummy
+	}
+}
+
+# Removes this module's objectives
+function uninstall train:uninstall {
+	REPEAT (objectives.head) as o {
+		scoreboard objectives remove train.<%o%>
 	}
 }

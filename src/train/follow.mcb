@@ -1,6 +1,3 @@
-import ../math.mcbt
-import ../../scale.js
-
 # Follower control. Each follower copies the speed of the cart ahead along the line to it, plus a correction toward 2 blocks of
 # spacing, and gets that written as its Motion every tick. Rail physics keeps the speed and puts the direction on the track.
 # The leader's speed is its real displacement since last tick. The Motion tag of a jammed cart holds whatever piled up, 3+ blocks
@@ -11,14 +8,20 @@ import ../../scale.js
 # along the way out of its block, the follower drives along the rails instead, never backward. See align and detour below. A leader on
 # a parallel track is not connected by rails, the line is all there is, and the follower is pulled along it, backward if need be.
 
+import ../../scale.js
+import ../objectives.js
+import ../math.mcbt
+
 # As a follower cart, at the follower
 function tick {
 	scoreboard players operation #prev train.tmp = @s train.prev
 	scoreboard players operation #self train.tmp = @s train.id
 	scoreboard players set #found train.tmp 0
-	execute store result score #fx train.tmp run data get entity @s Pos[0] <%UNIT%>
-	execute store result score #fy train.tmp run data get entity @s Pos[1] <%UNIT%>
-	execute store result score #fz train.tmp run data get entity @s Pos[2] <%UNIT%>
+	# Position read once, every entity read serializes the whole cart
+	data modify storage train:tmp pos set from entity @s Pos
+	execute store result score #fx train.tmp run data get storage train:tmp pos[0] <%UNIT%>
+	execute store result score #fy train.tmp run data get storage train:tmp pos[1] <%UNIT%>
+	execute store result score #fz train.tmp run data get storage train:tmp pos[2] <%UNIT%>
 	execute as @e[type=#train:carts,distance=..8] if score @s train.id = #prev train.tmp run function train:follow/leader_sample
 	execute if score #found train.tmp matches 0 run return run function train:follow/lost
 	execute if score @s train.lost matches 1.. run function train:follow/relink
@@ -66,8 +69,8 @@ function tick {
 	execute as @e[type=minecraft:block_display,tag=train.chain,distance=..12] if score @s train.id = #self train.tmp run function train:chain/apply
 	# Whether the leader is still within 1.5 blocks, for a wait, before its tag goes
 	scoreboard players set #near train.tmp 0
-	execute if score @s train.wait matches 1.. if entity @e[tag=train.lead_now,distance=..1.5] run scoreboard players set #near train.tmp 1
-	tag @e[tag=train.lead_now] remove train.lead_now
+	execute if score @s train.wait matches 1.. if entity @e[type=#train:carts,tag=train.lead_now,distance=..1.5] run scoreboard players set #near train.tmp 1
+	tag @e[type=#train:carts,tag=train.lead_now] remove train.lead_now
 
 	# Speed along the heading to the leader is the leader's speed on that heading plus a correction toward the spacing.
 	# Gap over spacing speeds up, gap under slows or backs off, so energy never builds up down the train
@@ -105,8 +108,7 @@ function tick {
 
 	# Furnace followers burn fuel and push along their own PushX and PushZ, which fights the controller.
 	# Only written when something is set, NBT writes every tick aren't free
-	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {Fuel:0s} run data modify entity @s Fuel set value 0s
-	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {PushX:0.0d,PushZ:0.0d} run data merge entity @s {PushX:0.0d,PushZ:0.0d}
+	execute if entity @s[type=minecraft:furnace_minecart] unless data entity @s {Fuel:0s} run data merge entity @s {Fuel:0s,PushX:0.0d,PushZ:0.0d}
 }
 
 # As a follower, #mx #mz the Motion to write, remembered for a transit
@@ -320,7 +322,7 @@ function relink {
 
 # As a follower. The chain broke, it was stretched too far for too long, or another cart is in the way. The leader is still marked from the sample
 function snap {
-	tag @e[tag=train.lead_now] remove train.lead_now
+	tag @e[type=#train:carts,tag=train.lead_now] remove train.lead_now
 	function train:link/unlink
 }
 
@@ -328,9 +330,10 @@ function snap {
 function leader_sample {
 	scoreboard players set #found train.tmp 1
 	tag @s add train.lead_now
-	execute store result score #lx train.tmp run data get entity @s Pos[0] <%UNIT%>
-	execute store result score #ly train.tmp run data get entity @s Pos[1] <%UNIT%>
-	execute store result score #lz train.tmp run data get entity @s Pos[2] <%UNIT%>
+	data modify storage train:tmp pos set from entity @s Pos
+	execute store result score #lx train.tmp run data get storage train:tmp pos[0] <%UNIT%>
+	execute store result score #ly train.tmp run data get storage train:tmp pos[1] <%UNIT%>
+	execute store result score #lz train.tmp run data get storage train:tmp pos[2] <%UNIT%>
 	# Once per tick: a second follower of the same leader reuses the velocity the first one took, the stored position is already this tick's
 	execute if score @s train.lpt = #gen train.tmp run return run function train:follow/leader_cached
 	# A leader not sampled last tick has no history, so it starts at 0 and not at the jump from wherever it was left
@@ -383,15 +386,18 @@ function brake_comp {
 	scoreboard players operation #sp train.tmp += #sp train.tmp
 }
 
+# Ticks in a row a follower's gap has been at the break distance, a follower's rails to its leader as exit direction plus 1, units of path and 1
+# on a detour, and the last position of a leader, its tick stamp and the velocity cached for its other followers
 function load minecraft:load {
-	# Ticks in a row a follower's gap has been at the break distance
-	scoreboard objectives add train.strain dummy
-	# A follower's rails to its leader. Exit direction plus 1, units of path, and 1 while on a detour
-	REPEAT (['cdir', 'cgap', 'cdet']) as o {
+	REPEAT (objectives.follow) as o {
 		scoreboard objectives add train.<%o%> dummy
 	}
-	# Last position of a leader and its tick stamp, its speed is the change since the last sample, cached on the leader for its other followers
-	REPEAT (['lpx', 'lpz', 'lpt', 'lvx', 'lvz']) as o {
-		scoreboard objectives add train.<%o%> dummy
+}
+
+# Removes this module's objectives and tags
+function uninstall train:uninstall {
+	tag @e[type=#train:carts] remove train.lead_now
+	REPEAT (objectives.follow) as o {
+		scoreboard objectives remove train.<%o%>
 	}
 }

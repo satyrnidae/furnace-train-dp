@@ -1,12 +1,20 @@
-import ../../scale.js
-
 # Chunk loading. Every cart in a coupled train forceloads the chunks its 15x15 block square touches, so the squares overlap down the
 # train and give the head lead and the tail follow time. Claims are stamped with the tick, a sweep drops whatever wasn't touched.
 # That frees chunks that fall out of range, the whole train when any cart is off the rails, and anything left by a cut link or a dead cart.
 # A chunk that was already forceloaded is remembered as not ours and never removed. Only the overworld, nether and end are handled.
 # Chunk keys are fake players named c<dimension>_<x>_<z> on train.cgen, stamp, and train.cpres, 0 ours and 1 already forced.
 # The registry of claimed chunks is the list train:chunks active.
-# The tick only calls head while #chunkload on train.const isn't 0. The sweep always runs, so turning it off frees every claim.
+# The pass only calls head while #chunkload on train.const isn't 0. The sweep always runs, so turning it off frees every claim.
+
+import ../../scale.js
+import ../objectives.js
+
+# Every fifth tick, from train:tick
+function pass {
+	# The sweep runs even with chunk loading off, nothing is touched so it releases what was claimed
+	execute unless score #chunkload train.const matches 0 as @e[type=#train:carts,tag=!train.follower,tag=!global.ignore] if score @s train.id = @s train.id at @s run function train:chunks/head
+	function train:chunks/sweep
+}
 
 # As a cart that isn't a follower, at the cart. Only trains with a follower hold chunks
 function head {
@@ -55,8 +63,9 @@ function apply_visit {
 
 # As a cart, at it. Refreshes every chunk its square touches. Positions are in units, see scale.js, and floor division by a chunk, 1024 of them, gives the chunk
 function touch_cart {
-	execute store result score #xm train.tmp run data get entity @s Pos[0] <%UNIT%>
-	execute store result score #zm train.tmp run data get entity @s Pos[2] <%UNIT%>
+	data modify storage train:tmp pos set from entity @s Pos
+	execute store result score #xm train.tmp run data get storage train:tmp pos[0] <%UNIT%>
+	execute store result score #zm train.tmp run data get storage train:tmp pos[2] <%UNIT%>
 	scoreboard players set #d train.tmp -1
 	REPEAT ({'overworld': 0, 'the_nether': 1, 'the_end': 2}) as name, i {
 		execute if dimension minecraft:<%name%> run scoreboard players set #d train.tmp <%i%>
@@ -116,10 +125,24 @@ function touch {
 function new {
 	$execute in $(dim) store success score c$(d)_$(cx)_$(cz) train.cpres run forceload query $(bx) $(bz)
 	$execute in $(dim) run forceload add $(bx) $(bz)
+	# global.forceload convention: a marker tagged for the chunk, so other packs keep it loaded after this one lets go
+	$execute in $(dim) positioned $(bx) -64 $(bz) run summon minecraft:marker ~8 ~64 ~8 {Tags:["train.chunk","global.forceload"]}
 	$data modify storage train:chunks active append value {d:$(d),dim:"$(dim)",cx:$(cx),cz:$(cz),bx:$(bx),bz:$(bz)}
 }
 
-# Releases every registered chunk nothing touched this tick
+# Macro. Drops this pack's marker of the chunk, then unloads it unless a marker of another pack with global.forceload is in it. The volume
+# is the chunk at vanilla height, one short on each side because of MC-123441
+function release {
+	$execute in $(dim) positioned $(bx) -64 $(bz) run function train:chunks/release_here
+}
+
+# At the chunk corner at the bottom
+function release_here {
+	kill @e[type=minecraft:marker,tag=train.chunk,dx=15,dy=319,dz=15]
+	execute unless entity @e[tag=global.forceload,dx=15,dy=319,dz=15] run forceload remove ~ ~
+}
+
+# Releases every registered chunk nothing touched this pass
 function sweep {
 	execute if score #grace train.tmp matches 1.. run return run scoreboard players remove #grace train.tmp 1
 	execute unless data storage train:chunks active run data modify storage train:chunks active set value []
@@ -138,15 +161,47 @@ function sweep_loop {
 # Macro. A fresh chunk stays in the registry, a stale one is released unless it was forced before this pack touched it
 function sweep_one {
 	$execute if score c$(d)_$(cx)_$(cz) train.cgen = #gen train.tmp run data modify storage train:chunks active append value {d:$(d),dim:"$(dim)",cx:$(cx),cz:$(cz),bx:$(bx),bz:$(bz)}
-	$execute unless score c$(d)_$(cx)_$(cz) train.cgen = #gen train.tmp unless score c$(d)_$(cx)_$(cz) train.cpres matches 1 in $(dim) run forceload remove $(bx) $(bz)
+	$execute unless score c$(d)_$(cx)_$(cz) train.cgen = #gen train.tmp unless score c$(d)_$(cx)_$(cz) train.cpres matches 1 run function train:chunks/release {dim:"$(dim)",bx:$(bx),bz:$(bz)}
+	$execute unless score c$(d)_$(cx)_$(cz) train.cgen = #gen train.tmp if score c$(d)_$(cx)_$(cz) train.cpres matches 1 run function train:chunks/unmark {dim:"$(dim)",bx:$(bx),bz:$(bz)}
 	$execute unless score c$(d)_$(cx)_$(cz) train.cgen = #gen train.tmp run scoreboard players reset c$(d)_$(cx)_$(cz) train.cpres
 	$execute unless score c$(d)_$(cx)_$(cz) train.cgen = #gen train.tmp run scoreboard players reset c$(d)_$(cx)_$(cz) train.cgen
 }
 
 # Per chunk, fake players named c<dimension>_<x>_<z>, and the registry of chunks this pack forceloaded, which survives reloads
 function load minecraft:load {
-	REPEAT (['cgen', 'cpres']) as o {
+	REPEAT (objectives.chunks) as o {
 		scoreboard objectives add train.<%o%> dummy
 	}
 	execute unless data storage train:chunks active run data modify storage train:chunks active set value []
+}
+
+# Macro. Drops this pack's marker of a chunk another pack had forceloaded already, the chunk itself stays loaded
+function unmark {
+	$execute in $(dim) positioned $(bx) -64 $(bz) run kill @e[type=minecraft:marker,tag=train.chunk,dx=15,dy=319,dz=15]
+}
+
+# Releases every chunk this pack forceloaded, then removes its objectives and storage
+function uninstall train:uninstall {
+	data modify storage train:chunks work set from storage train:chunks active
+	function train:chunks/uninstall_loop
+	data remove storage train:chunks active
+	data remove storage train:chunks work
+	data remove storage train:chunk args
+	data remove storage train:tmp pos
+	REPEAT (objectives.chunks) as o {
+		scoreboard objectives remove train.<%o%>
+	}
+}
+
+function uninstall_loop {
+	execute unless data storage train:chunks work[0] run return 0
+	function train:chunks/uninstall_one with storage train:chunks work[0]
+	data remove storage train:chunks work[0]
+	function train:chunks/uninstall_loop
+}
+
+# Macro. A chunk that was forced before the pack keeps its forceload, the marker goes either way
+function uninstall_one {
+	$execute unless score c$(d)_$(cx)_$(cz) train.cpres matches 1 run function train:chunks/release {dim:"$(dim)",bx:$(bx),bz:$(bz)}
+	$execute if score c$(d)_$(cx)_$(cz) train.cpres matches 1 run function train:chunks/unmark {dim:"$(dim)",bx:$(bx),bz:$(bz)}
 }

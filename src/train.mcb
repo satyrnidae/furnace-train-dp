@@ -9,11 +9,13 @@
 # that mcb tags can't express.
 
 import ../scale.js
+import objectives.js
+import chains.js
 
 #region Setup
 function load minecraft:load {
 	# The temporaries and constants every module shares. Each module declares its own objectives in a load block of its own
-	REPEAT (['tmp', 'const']) as o {
+	REPEAT (objectives.shared) as o {
 		scoreboard objectives add train.<%o%> dummy
 	}
 	scoreboard players set #2 train.const 2
@@ -37,12 +39,37 @@ function load minecraft:load {
 	# Debug, 1 turns braking off so a head-on can be tested
 	scoreboard players set #noavoid train.const 0
 	# Chunk loading, 0 off and anything else on. Flip it with /scoreboard players set #chunkload train.const 0. Only set here when unset so a
-	# reload keeps what was chosen. Off, the sweep frees every claim next tick, or once the grace below runs out after a reload
+	# reload keeps what was chosen. Off, the sweep frees every claim on the next pass, or once the grace below runs out after a reload
 	execute unless score #chunkload train.const = #chunkload train.const run scoreboard players set #chunkload train.const 1
-	# After a restart carts load a few ticks after the forced chunks do, so skip sweeping for a while
-	scoreboard players set #grace train.tmp 100
+	# After a restart carts load a few ticks after the forced chunks do, so skip sweeping for a while, 20 passes of 5 ticks
+	scoreboard players set #grace train.tmp 20
 }
 #endregion
+
+# Removes everything the pack created, then disables it. Run as an operator: /function train:uninstall
+# Carts stay as they are, unlinked. Chunks the pack forceloaded are released, except those that were forced before it.
+function uninstall {
+	tellraw @s {text:"Furnace Minecart Trains: uninstalling"}
+
+	# Each module removes its own objectives, tags and entities through this tag
+	function #train:uninstall
+
+	data remove storage train:tmp tf
+	data remove storage train:drop item
+
+	REPEAT (objectives.shared) as o {
+		scoreboard objectives remove train.<%o%>
+	}
+	scoreboard objectives remove train.eq.var
+	scoreboard objectives remove train.eq.const
+
+	# The result has to be read after the objectives are gone, so it goes in a storage value
+	execute store success storage train:tmp uninstalled byte 1 run datapack disable "file/<%config.packName%>"
+	execute unless data storage train:tmp {uninstalled:1b} run tellraw @s {text:"Remove the data pack folder or zip from the world's datapacks folder, it could not be disabled by name", color:"yellow"}
+	execute if data storage train:tmp {uninstalled:1b} run tellraw @s {text:"Furnace Minecart Trains: uninstalled", color:"green"}
+	data remove storage train:tmp uninstalled
+}
+
 
 function tick minecraft:tick {
 	# Velocities of every furnace cart, first so everything below sees this tick's
@@ -56,15 +83,72 @@ function tick minecraft:tick {
 	execute as @e[type=minecraft:interaction,tag=train.hit] at @s if data entity @s interaction run function train:click/hit
 	execute as @e[type=minecraft:interaction,tag=train.hit] if data entity @s attack run data remove entity @s attack
 
-	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower] at @s run function train:head/rail
-	execute as @e[type=#train:carts,tag=train.follower] at @s run function train:follow/tick
-	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower] run function train:fuel/check
-	execute as @e[type=minecraft:block_display,tag=train.chain] run function train:chain/check
+	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower,tag=!global.ignore,tag=!global.ignore.pos] at @s run function train:head/rail
+	execute as @e[type=#train:carts,tag=train.follower,tag=!global.ignore,tag=!global.ignore.pos] at @s run function train:follow/tick
+	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower,tag=!global.ignore] run function train:fuel/check
+	# Orphans are rare, the check runs once a second
+	execute if score #p20 train.tmp matches 0 run execute as @e[type=minecraft:block_display,tag=train.chain] run function train:chain/check
 	function train:click/arm
 
-	# Chunk claims are stamped with this tick, the sweep drops whatever wasn't touched
 	scoreboard players add #gen train.tmp 1
-	# The sweep runs even with chunk loading off, nothing is touched so it releases what was claimed
-	execute unless score #chunkload train.const matches 0 as @e[type=#train:carts,tag=!train.follower] if score @s train.id = @s train.id at @s run function train:chunks/head
-	function train:chunks/sweep
+	eq #p5 train.tmp = #gen train.tmp % 5
+	eq #p20 train.tmp = #gen train.tmp % 20
+	# Chunk claims are stamped with the pass tick and the sweep drops whatever wasn't touched. A cart covers 2 blocks in 5 ticks at most, and
+	# its square reaches 7.5, so a pass every fifth tick keeps the chunks ahead of the train and halves the macro calls twice over
+	execute if score #p5 train.tmp matches 0 run function train:chunks/pass
+}
+
+# The pack's node of the datapack advancement tree, under the author node of src/global.mcb
+advancement root {
+	"display": {
+		"title": {"translate": "train.advancement.root.title", "fallback": "Furnace Minecart Trains", "color": "gold"},
+		"description": {"translate": "train.advancement.root.description", "fallback": "Chain furnace minecarts into self-driving trains!", "color": "yellow"},
+		"icon": {"id": "minecraft:furnace_minecart"},
+		"show_toast": false,
+		"announce_to_chat": false
+	},
+	"parent": "global:satyrnidae/author",
+	"criteria": {
+		"trigger": {"trigger": "minecraft:tick"}
+	}
+}
+
+# Carts, anything the pack couples. Spawner and command block carts are included, they are carts to a train
+tag entity_types carts {
+	minecraft:minecart
+	minecraft:furnace_minecart
+	minecraft:chest_minecart
+	minecraft:hopper_minecart
+	minecraft:tnt_minecart
+	minecraft:spawner_minecart
+	minecraft:command_block_minecart
+}
+
+tag items fuel {
+	minecraft:coal
+	minecraft:charcoal
+}
+
+# Anything a sneaking player can couple or cut with
+tag items tools {
+	#train:couplers
+	minecraft:shears
+}
+
+# Every chain item. Optional entries, an id a version doesn't have is skipped instead of failing the tag, which mcb tags can't say
+json tags/item couplers {
+	"values": <%JSON.stringify(chains.map((id) => ({ id: "minecraft:" + id, required: false })))%>
+}
+
+predicate sneaking {
+	"type": "minecraft:entity_properties",
+	"entity": "this",
+	"predicate": { "flags": { "is_sneaking": true } }
+}
+
+# Takes one item from a stack
+item_modifier take_one {
+	"type": "minecraft:set_count",
+	"count": -1,
+	"add": true
 }

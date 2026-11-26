@@ -1,4 +1,3 @@
-import ../math.mcbt
 # Look-ahead braking. A head, meaning a furnace cart that isn't a follower, traces the rail ahead once every #period ticks, slot picked by
 # its id so heads spread across the period, and remembers the path distance to the first foreign cart as train.gap. Every tick between
 # traces the gap is aged by the distance the head travelled, and a speed cap comes from it:
@@ -8,10 +7,12 @@ import ../math.mcbt
 # train.halt 3 is yielding, see head.mcb. The speed cap has to be under 0.2, a head tops out there, before it counts as blocked.
 
 import ../../scale.js
+import ../objectives.js
+import ../math.mcbt
 
 # Called from train:tick right after the sampler, before head/rail
 function tick {
-	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower] at @s run function train:avoid/head
+	execute as @e[type=minecraft:furnace_minecart,tag=!train.follower,tag=!global.ignore] at @s run function train:avoid/head
 }
 
 # As a head, at it
@@ -80,7 +81,14 @@ function enter {
 # Gap to the next cart along the rail, tick of the last trace, and the heading it looked along. A different heading means an immediate
 # trace, and a resume resets it for the same reason
 function load minecraft:load {
-	REPEAT (['gap', 'chk', 'tdir']) as o {
+	REPEAT (objectives.avoid) as o {
 		scoreboard objectives add train.<%o%> dummy
+	}
+}
+
+# Removes this module's objectives
+function uninstall train:uninstall {
+	REPEAT (objectives.avoid) as o {
+		scoreboard objectives remove train.<%o%>
 	}
 }

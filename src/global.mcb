@@ -1,0 +1,46 @@
+# The shared nodes of the datapack advancement tree, the same files in every pack by satyrnidae so whichever loads first or last
+# leaves the same result. Each pack adds its own node under global:satyrnidae/author.
+
+advancement root {
+  "display": {
+    "title": {"translate": "global.advancement.root.title", "fallback": "Installed Datapacks"},
+    "description": "",
+    "icon": {
+      "id": "minecraft:knowledge_book"
+    },
+    "background": "minecraft:block/gray_concrete",
+    "show_toast": false,
+    "announce_to_chat": false
+  },
+  "criteria": {
+    "trigger": {
+      "trigger": "minecraft:tick"
+    }
+  }
+}
+
+advancement satyrnidae/author {
+  "display": {
+    "title": {"translate": "global.advancement.satyrnidae.title", "fallback": "satyrnidae"},
+    "description": {"translate": "global.advancement.satyrnidae.description", "fallback": "Datapacks Created by satyrnidae!"},
+    "icon": {
+      "id": "minecraft:player_head",
+      "components": {
+        "minecraft:profile": {
+          "properties" : [ {
+            "name" : "textures",
+            "value" : "ewogICJ0aW1lc3RhbXAiIDogMTc5NTIzNTIwOTY0NCwKICAicHJvZmlsZUlkIiA6ICIzZGU0NmM2ZTQ1MjU0YjgxOTNkOGY2ZTc1ZTg4Nzg1OSIsCiAgInByb2ZpbGVOYW1lIiA6ICJzYXR5cm5zcmluZ3MiLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvODc2NDY4ZjIyNzdhMmI1ZmE5OTUxMDY2MTg4MTViZTU5NjA0OTdmMjc1MTg2YWFiZGUwZTY3YzIxZDhkZjk3YyIKICAgIH0KICB9Cn0="
+          } ]
+        }
+      }
+    },
+    "show_toast": false,
+    "announce_to_chat": false
+  },
+  "parent": "global:root",
+  "criteria": {
+    "trigger": {
+      "trigger": "minecraft:tick"
+    }
+  }
+}
