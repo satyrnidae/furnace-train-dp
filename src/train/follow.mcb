@@ -113,10 +113,10 @@ function tick {
 
 # As a follower, #mx #mz the Motion to write, remembered for a transit
 function write {
-	scoreboard players operation @s train.lmx = #mx train.tmp
-	scoreboard players operation @s train.lmz = #mz train.tmp
-	execute store result entity @s Motion[0] double <%1 / UNIT%> run scoreboard players get #mx train.tmp
-	execute store result entity @s Motion[2] double <%1 / UNIT%> run scoreboard players get #mz train.tmp
+	REPEAT (['x', 'z']) as a {
+		scoreboard players operation @s train.lm<%a%> = #m<%a%> train.tmp
+		execute store result entity @s Motion[<%a == 'x' ? 0 : 2%>] double <%1 / UNIT%> run scoreboard players get #m<%a%> train.tmp
+	}
 }
 
 # As a follower, at it, after the gap length. Sets #blocked train.tmp to 1 when another cart stands on the line to the leader, between the two
@@ -267,16 +267,19 @@ function lost {
 # is about 8 blocks at 0.4, a portal 2 blocks ahead is reached in a handful. An unpowered powered rail halves speed, so as in tick it is
 # asked for double. A powered one is not compensated, the extra 0.06 only carries the cart further in
 function coast {
-	scoreboard players operation #mx train.tmp = @s train.lmx
-	scoreboard players operation #mz train.tmp = @s train.lmz
+	REPEAT (['x', 'z']) as a {
+		scoreboard players operation #m<%a%> train.tmp = @s train.lm<%a%>
+	}
 	execute if block ~ ~ ~ minecraft:powered_rail[powered=false] run function train:follow/coast_brake
-	execute store result entity @s Motion[0] double <%1 / UNIT%> run scoreboard players get #mx train.tmp
-	execute store result entity @s Motion[2] double <%1 / UNIT%> run scoreboard players get #mz train.tmp
+	REPEAT (['x', 'z']) as a {
+		execute store result entity @s Motion[<%a == 'x' ? 0 : 2%>] double <%1 / UNIT%> run scoreboard players get #m<%a%> train.tmp
+	}
 }
 
 function coast_brake {
-	scoreboard players operation #mx train.tmp += #mx train.tmp
-	scoreboard players operation #mz train.tmp += #mz train.tmp
+	REPEAT (['x', 'z']) as a {
+		scoreboard players operation #m<%a%> train.tmp += #m<%a%> train.tmp
+	}
 }
 
 # As a follower with a wait running, after the chain display. Two carts out of a portal at one spot are sorted by vanilla's shove, which has no
@@ -302,7 +305,7 @@ function relink {
 	# The coast speed stops here. A follower that lands on its leader inside the deadband gets no Motion written, and would carry the
 	# coast straight through it
 	data modify entity @s Motion set value [0.0d,0.0d,0.0d]
-	execute if entity @e[tag=train.lead_now,distance=..1.5] run scoreboard players set @s train.wait 40
+	execute if entity @e[type=#train:carts,tag=train.lead_now,distance=..1.5] run scoreboard players set @s train.wait 40
 	function train:chain/seen
 	tag @s add train.hold_now
 	function train:chain/hop
