@@ -34,6 +34,9 @@ function lib/flat {
 function lib/cleanup {
 	kill @e[tag=tt,tag=!tt.origin]
 	execute at @e[tag=tt.origin,limit=1] run kill @e[type=minecraft:item,distance=..64]
+	# A test that turned chunk loading off and failed early must not leave it off for the next one. Only tests that start with lib/begin get
+	# this, one that doesn't must set #chunkload itself, as t38 does
+	scoreboard players set #chunkload train.const 1
 }
 
 # Printed when a step fails. State of the head tt.h, if there is one, so a log is enough to see why. A headless server logs say and not tellraw.
@@ -1062,6 +1065,47 @@ function chunk/claimed {
 	# A chunk no square reaches is not claimed
 	execute in minecraft:overworld store success score #q train_test run forceload query 2976 3004
 	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+}
+# #chunkload 0, the same train as t29 claims nothing. The test's own forced chunk stays forced
+function chunk/off_start {
+	function train_test:chunk/start
+	scoreboard players set #chunkload train.const 0
+}
+function chunk/off_check {
+	scoreboard players set #ok train_test 1
+	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3004
+	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3008
+	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3008
+	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3004
+	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+}
+# Back on, the claims return without touching the train
+function chunk/on {
+	scoreboard players set #chunkload train.const 1
+}
+# Off again while the train holds its claims, the sweep frees them. The derail path is t29's
+function chunk/off {
+	scoreboard players set #chunkload train.const 0
+}
+# A reload runs the load function. Unset it comes back on, set to 0 it stays 0
+function chunk/reload_unset {
+	scoreboard players set #ok train_test 1
+	scoreboard players reset #chunkload train.const
+	function train:load
+	execute unless score #chunkload train.const matches 1 run scoreboard players set #ok train_test 0
+	scoreboard players set #chunkload train.const 0
+	function train:load
+}
+function chunk/reload_kept {
+	scoreboard players set #ok train_test 1
+	execute unless score #chunkload train.const matches 0 run scoreboard players set #ok train_test 0
+}
+function chunk/reload_done {
+	scoreboard players set #chunkload train.const 1
+	scoreboard players set #ok train_test 1
 }
 function chunk/derail {
 	execute at @e[tag=tt.origin,limit=1] run setblock ~ ~ ~ minecraft:air
