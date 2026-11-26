@@ -12,50 +12,8 @@ import ../scale.js
 
 #region Setup
 function load minecraft:load {
-	# Per cart
-	REPEAT (['id', 'prev', 'sel', 'len']) as o {
-		scoreboard objectives add train.<%o%> dummy
-	}
-	# Ticks in a row a follower's gap has been at the break distance
-	scoreboard objectives add train.strain dummy
-	# Portal transit, see follow.mcb. Ticks a follower has held for a leader in another dimension, and the Motion it last wrote
-	scoreboard objectives add train.lost dummy
-	scoreboard objectives add train.lmx dummy
-	scoreboard objectives add train.lmz dummy
-	# Ticks a follower that landed on its leader stays still, see follow.mcb
-	scoreboard objectives add train.wait dummy
-	# Per chain display, where it hangs from its follower while the leader is away, in units
-	scoreboard objectives add train.ox dummy
-	scoreboard objectives add train.oy dummy
-	scoreboard objectives add train.oz dummy
-	# A follower's rails to its leader, see follow.mcb. Exit direction plus 1, units of path, and 1 while on a detour
-	REPEAT (['cdir', 'cgap', 'cdet']) as o {
-		scoreboard objectives add train.<%o%> dummy
-	}
-	# Last position of a leader, its speed is the change since the last sample, see follow.mcb
-	REPEAT (['lpx', 'lpz']) as o {
-		scoreboard objectives add train.<%o%> dummy
-	}
-	# Leader sample, once per tick however many followers it has: tick stamp and cached velocity, see follow.mcb
-	REPEAT (['lpt', 'lvx', 'lvz']) as o {
-		scoreboard objectives add train.<%o%> dummy
-	}
-	# Held head, saved motion and push, see head.mcb
-	REPEAT (['halt', 'smx', 'smz', 'spx', 'spz']) as o {
-		scoreboard objectives add train.<%o%> dummy
-	}
-	# Furnace carts, see sample.mcb and avoid.mcb. Position last tick, velocity, last heading 0 N 1 E 2 S 3 W, gap to the next cart along the rail, tick of the last trace
-	REPEAT (['ppx', 'ppz', 'svx', 'svz']) as o {
-		scoreboard objectives add train.<%o%> dummy
-	}
-	# The velocity of the tick before, the crash check reads both, see crash.mcb
-	REPEAT (['pvx', 'pvz', 'dir', 'gap', 'chk']) as o {
-		scoreboard objectives add train.<%o%> dummy
-	}
-	# Heading the last trace looked along, a different heading means an immediate trace. Reset by a resume for the same reason
-	scoreboard objectives add train.tdir dummy
-	# Per chunk, fake players named c<dimension>_<x>_<z>
-	REPEAT (['cgen', 'cpres', 'tmp', 'const']) as o {
+	# The temporaries and constants every module shares. Each module declares its own objectives in a load block of its own
+	REPEAT (['tmp', 'const']) as o {
 		scoreboard objectives add train.<%o%> dummy
 	}
 	scoreboard players set #2 train.const 2
@@ -81,8 +39,6 @@ function load minecraft:load {
 	# Chunk loading, 0 off and anything else on. Flip it with /scoreboard players set #chunkload train.const 0. Only set here when unset so a
 	# reload keeps what was chosen. Off, the sweep frees every claim next tick, or once the grace below runs out after a reload
 	execute unless score #chunkload train.const = #chunkload train.const run scoreboard players set #chunkload train.const 1
-	# Registry of chunks this pack forceloaded, survives reloads
-	execute unless data storage train:chunks active run data modify storage train:chunks active set value []
 	# After a restart carts load a few ticks after the forced chunks do, so skip sweeping for a while
 	scoreboard players set #grace train.tmp 100
 }

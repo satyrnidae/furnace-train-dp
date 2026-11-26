@@ -24,15 +24,9 @@ function tick {
 	execute if score @s train.lost matches 1.. run function train:follow/relink
 
 	# Vector to the leader
-	scoreboard players operation #dx train.tmp = #lx train.tmp
-	scoreboard players operation #dx train.tmp -= #fx train.tmp
-	scoreboard players operation #dz train.tmp = #lz train.tmp
-	scoreboard players operation #dz train.tmp -= #fz train.tmp
-	scoreboard players operation #dsq train.tmp = #dx train.tmp
-	scoreboard players operation #dsq train.tmp *= #dx train.tmp
-	scoreboard players operation #t train.tmp = #dz train.tmp
-	scoreboard players operation #t train.tmp *= #dz train.tmp
-	scoreboard players operation #dsq train.tmp += #t train.tmp
+	eq #dx train.tmp = #lx train.tmp - #fx train.tmp
+	eq #dz train.tmp = #lz train.tmp - #fz train.tmp
+	eq #dsq train.tmp = #dx train.tmp * #dx train.tmp + #dz train.tmp * #dz train.tmp
 
 	# Gap length, newton from last tick's value. Never lets the estimate collapse to 0, newton can't recover from that
 	scoreboard players operation #len train.tmp = @s train.len
@@ -66,16 +60,9 @@ function tick {
 	scoreboard players operation @s train.cdet = #detour train.tmp
 
 	# Chain display at the midpoint, raised 0.4
-	scoreboard players operation #cx train.tmp = #fx train.tmp
-	scoreboard players operation #cx train.tmp += #lx train.tmp
-	scoreboard players operation #cx train.tmp /= #2 train.const
-	scoreboard players operation #cy train.tmp = #fy train.tmp
-	scoreboard players operation #cy train.tmp += #ly train.tmp
-	scoreboard players operation #cy train.tmp /= #2 train.const
-	scoreboard players add #cy train.tmp <%u(0.4)%>
-	scoreboard players operation #cz train.tmp = #fz train.tmp
-	scoreboard players operation #cz train.tmp += #lz train.tmp
-	scoreboard players operation #cz train.tmp /= #2 train.const
+	eq #cx train.tmp = (#fx train.tmp + #lx train.tmp) / 2
+	eq #cy train.tmp = (#fy train.tmp + #ly train.tmp) / 2 + <%u(0.4)%>
+	eq #cz train.tmp = (#fz train.tmp + #lz train.tmp) / 2
 	execute as @e[type=minecraft:block_display,tag=train.chain,distance=..12] if score @s train.id = #self train.tmp run function train:chain/apply
 	# Whether the leader is still within 1.5 blocks, for a wait, before its tag goes
 	scoreboard players set #near train.tmp 0
@@ -84,14 +71,8 @@ function tick {
 
 	# Speed along the heading to the leader is the leader's speed on that heading plus a correction toward the spacing.
 	# Gap over spacing speeds up, gap under slows or backs off, so energy never builds up down the train
-	scoreboard players operation #sp train.tmp = #vx train.tmp
-	scoreboard players operation #sp train.tmp *= #dx train.tmp
-	scoreboard players operation #t train.tmp = #vz train.tmp
-	scoreboard players operation #t train.tmp *= #dz train.tmp
-	scoreboard players operation #sp train.tmp += #t train.tmp
-	scoreboard players operation #sp train.tmp /= #len train.tmp
-	scoreboard players operation #err train.tmp = #len train.tmp
-	scoreboard players operation #err train.tmp -= #spacing train.const
+	eq #sp train.tmp = (#vx train.tmp * #dx train.tmp + #vz train.tmp * #dz train.tmp) / #len train.tmp
+	eq #err train.tmp = #len train.tmp - #spacing train.const
 	# A follower more than a block back may run faster than a cart usually does, to close a stretch before the chain gives
 	scoreboard players set #fcap train.tmp <%u(0.45)%>
 	execute if score #err train.tmp matches <%u(1)%>.. run scoreboard players set #fcap train.tmp <%u(0.65)%>
@@ -115,12 +96,8 @@ function tick {
 	execute if block ~ ~ ~ minecraft:powered_rail[powered=false] run function train:follow/brake_comp
 
 	# Motion is the unit heading times the speed
-	scoreboard players operation #mx train.tmp = #dx train.tmp
-	scoreboard players operation #mx train.tmp *= #sp train.tmp
-	scoreboard players operation #mx train.tmp /= #len train.tmp
-	scoreboard players operation #mz train.tmp = #dz train.tmp
-	scoreboard players operation #mz train.tmp *= #sp train.tmp
-	scoreboard players operation #mz train.tmp /= #len train.tmp
+	eq #mx train.tmp = #dx train.tmp * #sp train.tmp / #len train.tmp
+	eq #mz train.tmp = #dz train.tmp * #sp train.tmp / #len train.tmp
 
 	# Within 0.3 blocks the heading means nothing and writing it would cancel vanilla's push between carts, so motion is left alone.
 	# What is written is remembered for a transit, see lost, and what isn't is not
@@ -404,4 +381,17 @@ function boost_comp {
 # A follower keeps crawling through and the head never feels it
 function brake_comp {
 	scoreboard players operation #sp train.tmp += #sp train.tmp
+}
+
+function load minecraft:load {
+	# Ticks in a row a follower's gap has been at the break distance
+	scoreboard objectives add train.strain dummy
+	# A follower's rails to its leader. Exit direction plus 1, units of path, and 1 while on a detour
+	REPEAT (['cdir', 'cgap', 'cdet']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
+	# Last position of a leader and its tick stamp, its speed is the change since the last sample, cached on the leader for its other followers
+	REPEAT (['lpx', 'lpz', 'lpt', 'lvx', 'lvz']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
 }

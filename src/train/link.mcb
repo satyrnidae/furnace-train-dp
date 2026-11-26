@@ -115,3 +115,10 @@ function assign_id {
 	scoreboard players add #next train.id 1
 	scoreboard players operation @s train.id = #next train.id
 }
+
+# Cart id, the id of the cart it follows, the selection of a player mid-coupling, and the gap length estimate
+function load minecraft:load {
+	REPEAT (['id', 'prev', 'sel', 'len']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
+}

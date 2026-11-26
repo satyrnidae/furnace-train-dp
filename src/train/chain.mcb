@@ -137,3 +137,10 @@ function check {
 	execute as @e[type=#train:carts,tag=train.follower] if score @s train.id = #cid train.tmp run scoreboard players set #alive train.tmp 1
 	execute if score #alive train.tmp matches 0 run function train:chain/free
 }
+
+# Where a display hangs from its follower while the leader is away, in units
+function load minecraft:load {
+	REPEAT (['ox', 'oy', 'oz']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
+}

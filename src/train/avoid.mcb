@@ -76,3 +76,11 @@ function enter {
 	scoreboard players set @s train.halt 3
 	function train:head/yield
 }
+
+# Gap to the next cart along the rail, tick of the last trace, and the heading it looked along. A different heading means an immediate
+# trace, and a resume resets it for the same reason
+function load minecraft:load {
+	REPEAT (['gap', 'chk', 'tdir']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
+}

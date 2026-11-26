@@ -77,3 +77,10 @@ function up {
 	scoreboard players operation #prev train.tmp = @s train.prev
 	execute as @e[type=#train:carts] if score @s train.id = #prev train.tmp run function train:sample/up
 }
+
+# Position last tick, velocity, the velocity of the tick before, and the last heading 0 N 1 E 2 S 3 W
+function load minecraft:load {
+	REPEAT (['ppx', 'ppz', 'svx', 'svz', 'pvx', 'pvz', 'dir']) as o {
+		scoreboard objectives add train.<%o%> dummy
+	}
+}

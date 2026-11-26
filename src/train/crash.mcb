@@ -33,27 +33,18 @@ function pair {
 	scoreboard players operation #dvx train.tmp -= @s train.svx
 	scoreboard players operation #dvz train.tmp = @e[tag=train.me,limit=1] train.svz
 	scoreboard players operation #dvz train.tmp -= @s train.svz
-	scoreboard players operation #rs train.tmp = #dvx train.tmp
-	scoreboard players operation #rs train.tmp *= #dvx train.tmp
-	scoreboard players operation #t train.tmp = #dvz train.tmp
-	scoreboard players operation #t train.tmp *= #dvz train.tmp
-	scoreboard players operation #rs train.tmp += #t train.tmp
+	eq #rs train.tmp = #dvx train.tmp * #dvx train.tmp + #dvz train.tmp * #dvz train.tmp
 	# The same for last tick's velocities, and the faster of the two closings is the one used from here on. Within about 1.18 blocks vanilla's
 	# push has already cut both carts to a fifth, so this tick's velocities can read a hard hit as a gentle one
 	scoreboard players operation #qx train.tmp = @e[tag=train.me,limit=1] train.pvx
 	scoreboard players operation #qx train.tmp -= @s train.pvx
 	scoreboard players operation #qz train.tmp = @e[tag=train.me,limit=1] train.pvz
 	scoreboard players operation #qz train.tmp -= @s train.pvz
-	scoreboard players operation #rq train.tmp = #qx train.tmp
-	scoreboard players operation #rq train.tmp *= #qx train.tmp
-	scoreboard players operation #t train.tmp = #qz train.tmp
-	scoreboard players operation #t train.tmp *= #qz train.tmp
-	scoreboard players operation #rq train.tmp += #t train.tmp
+	eq #rq train.tmp = #qx train.tmp * #qx train.tmp + #qz train.tmp * #qz train.tmp
 	execute if score #rq train.tmp > #rs train.tmp run scoreboard players operation #dvx train.tmp = #qx train.tmp
 	execute if score #rq train.tmp > #rs train.tmp run scoreboard players operation #dvz train.tmp = #qz train.tmp
 	execute if score #rq train.tmp > #rs train.tmp run scoreboard players operation #rs train.tmp = #rq train.tmp
-	scoreboard players operation #h2 train.tmp = #hit train.const
-	scoreboard players operation #h2 train.tmp *= #hit train.const
+	eq #h2 train.tmp = #hit train.const * #hit train.const
 	execute if score #rs train.tmp < #h2 train.tmp run return 0
 
 	# Closing, the relative velocity points from the scanner toward this cart. Positions are the sampler's, this tick's
@@ -61,11 +52,7 @@ function pair {
 	scoreboard players operation #dpx train.tmp -= @e[tag=train.me,limit=1] train.ppx
 	scoreboard players operation #dpz train.tmp = @s train.ppz
 	scoreboard players operation #dpz train.tmp -= @e[tag=train.me,limit=1] train.ppz
-	scoreboard players operation #dot train.tmp = #dvx train.tmp
-	scoreboard players operation #dot train.tmp *= #dpx train.tmp
-	scoreboard players operation #t train.tmp = #dvz train.tmp
-	scoreboard players operation #t train.tmp *= #dpz train.tmp
-	scoreboard players operation #dot train.tmp += #t train.tmp
+	eq #dot train.tmp = #dvx train.tmp * #dpx train.tmp + #dvz train.tmp * #dpz train.tmp
 	execute unless score #dot train.tmp matches 1.. run return 0
 
 	# And on the same line. A cart on the rails one block over is inside 1.15 and passes without touching, carts are 0.98 wide. The offset
