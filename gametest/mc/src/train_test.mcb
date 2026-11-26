@@ -34,6 +34,8 @@ function lib/flat {
 function lib/cleanup {
 	kill @e[tag=tt,tag=!tt.origin]
 	execute at @e[tag=tt.origin,limit=1] run kill @e[type=minecraft:item,distance=..64]
+	# A test that turned chunk loading off and failed early must not leave it off for the next one
+	scoreboard players set #chunkload train.const 1
 }
 
 # Printed when a step fails. State of the head tt.h, if there is one, so a log is enough to see why. A headless server logs say and not tellraw.
@@ -1082,6 +1084,10 @@ function chunk/off_check {
 # Back on, the claims return without touching the train
 function chunk/on {
 	scoreboard players set #chunkload train.const 1
+}
+# Off again while the train holds its claims, the sweep frees them. The derail path is t29's
+function chunk/off {
+	scoreboard players set #chunkload train.const 0
 }
 # A reload runs the load function. Unset it comes back on, set to 0 it stays 0
 function chunk/reload_unset {
