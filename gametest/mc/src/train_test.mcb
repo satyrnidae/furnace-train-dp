@@ -34,7 +34,8 @@ function lib/flat {
 function lib/cleanup {
 	kill @e[tag=tt,tag=!tt.origin]
 	execute at @e[tag=tt.origin,limit=1] run kill @e[type=minecraft:item,distance=..64]
-	# A test that turned chunk loading off and failed early must not leave it off for the next one
+	# A test that turned chunk loading off and failed early must not leave it off for the next one. Only tests that start with lib/begin get
+	# this, one that doesn't must set #chunkload itself, as t38 does
 	scoreboard players set #chunkload train.const 1
 }
 
