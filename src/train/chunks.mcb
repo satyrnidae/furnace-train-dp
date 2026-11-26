@@ -6,6 +6,7 @@ import ../../scale.js
 # A chunk that was already forceloaded is remembered as not ours and never removed. Only the overworld, nether and end are handled.
 # Chunk keys are fake players named c<dimension>_<x>_<z> on train.cgen, stamp, and train.cpres, 0 ours and 1 already forced.
 # The registry of claimed chunks is the list train:chunks active.
+# The tick only calls head while #chunkload on train.const isn't 0. The sweep always runs, so turning it off frees every claim.
 
 # As a cart that isn't a follower, at the cart. Only trains with a follower hold chunks
 function head {

@@ -42,6 +42,9 @@ function second {
 # As the follower cart. The same cart clicked twice cancels
 function apply {
 	execute if score @s train.id = #lead train.tmp run return 0
+	# A leader that already follows this cart, directly or down the chain, would make a loop with no head, see cycle
+	function train:link/cycle
+	execute if score #loop train.tmp matches 1 run return 0
 	# Relinking drops the old chain
 	function train:chain/kill
 	scoreboard players operation @s train.prev = #lead train.tmp
@@ -49,6 +52,29 @@ function apply {
 	scoreboard players set @s train.strain 0
 	tag @s add train.follower
 	scoreboard players set #ok train.tmp 1
+}
+
+# As the follower to be, #lead the id of its leader. Sets #loop train.tmp to 1 when the leaders above #lead lead back to this cart. Each cart
+# in a loop copies the speed of the next and nothing slows them, so the loop never stops. Ids start at 1, 0 is no leader. Gives up at 64
+# links, far past any train
+function cycle {
+	scoreboard players operation #me train.tmp = @s train.id
+	scoreboard players operation #walk train.tmp = #lead train.tmp
+	scoreboard players set #loop train.tmp 0
+	scoreboard players set #depth train.tmp 0
+	function train:link/climb
+}
+
+# One step up the chain from #walk
+function climb {
+	scoreboard players add #depth train.tmp 1
+	execute if score #depth train.tmp matches 65.. run return 0
+	scoreboard players set #up train.tmp 0
+	execute as @e[type=#train:carts,tag=train.follower] if score @s train.id = #walk train.tmp run scoreboard players operation #up train.tmp = @s train.prev
+	execute if score #up train.tmp matches 0 run return 0
+	execute if score #up train.tmp = #me train.tmp run return run scoreboard players set #loop train.tmp 1
+	scoreboard players operation #walk train.tmp = #up train.tmp
+	function train:link/climb
 }
 
 # As the player, holding shears
