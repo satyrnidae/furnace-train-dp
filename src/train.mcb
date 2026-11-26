@@ -75,7 +75,6 @@ function load minecraft:load {
 	scoreboard players set #stop train.const <%u(2.5)%>
 	scoreboard players set #hit train.const <%u(0.1)%>
 	scoreboard players set #10 train.const 10
-	scoreboard players set #5 train.const 5
 	# Debug, 1 turns braking off so a head-on can be tested
 	scoreboard players set #noavoid train.const 0
 	# Registry of chunks this pack forceloaded, survives reloads

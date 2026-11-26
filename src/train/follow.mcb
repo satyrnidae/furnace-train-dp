@@ -53,21 +53,12 @@ function tick {
 	execute if score @s train.strain matches 5.. run return run function train:follow/snap
 
 	# Rails to the leader. The chord is a straight line, so on a hairpin it points back along the follower's own track, and the rail
-	# flips a cart whose Motion opposes it. Whether the follower's rails lead to the leader, and how far, is walked every 5 ticks, every tick
-	# while on a detour. A parallel track never connects, and there the chord is the only signal, reversal included
-	scoreboard players operation #slot train.tmp = @s train.id
-	scoreboard players operation #slot train.tmp += #gen train.tmp
-	scoreboard players operation #slot train.tmp %= #5 train.const
-	# Self compare is the unset check, a missing score never equals anything, so a fresh follower walks at once
-	execute unless score @s train.cdir = @s train.cdir run scoreboard players set #slot train.tmp 0
-	execute if score @s train.cdet matches 1 run scoreboard players set #slot train.tmp 0
-	scoreboard players set #fresh train.tmp 0
-	execute if score #slot train.tmp matches 0 run function train:follow/connect
-	# A detour is a chord that isn't along the way out of the block toward the leader. The rails may have changed since the last walk, so
-	# one that looks like a detour gets a fresh walk before it is believed
+	# flips a cart whose Motion opposes it. Whether the follower's rails lead to the leader, and how far, is walked every tick. A walk every 5
+	# ticks left the path length stale at a U turn, the follower backed off against the way the rails go, and the one behind it went with it.
+	# A parallel track never connects, and there the chord is the only signal, reversal included
+	function train:follow/connect
+	# A detour is a chord that isn't along the way out of the block toward the leader
 	function train:follow/align
-	execute if score #detour train.tmp matches 1 if score #fresh train.tmp matches 0 run function train:follow/connect
-	execute if score #detour train.tmp matches 1 if score #fresh train.tmp matches 1 run function train:follow/align
 	scoreboard players operation @s train.cdet = #detour train.tmp
 
 	# Chain display at the midpoint, raised 0.4
@@ -147,7 +138,6 @@ function write {
 
 # As a follower, at it, with the leader marked from the sample
 function connect {
-	scoreboard players set #fresh train.tmp 1
 	function train:trace/connect
 	scoreboard players operation @s train.cdir = #cdir train.tmp
 	scoreboard players operation @s train.cgap = #gap train.tmp
