@@ -72,11 +72,8 @@ function tick {
 	function train:follow/sqrt3
 	function train:follow/sqrt3
 
-	# Chain display at the midpoint, raised 0.4
-	eq #cx train.tmp = (#fx train.tmp + #lx train.tmp) / 2
-	eq #cy train.tmp = (#fy train.tmp + #ly train.tmp) / 2 + <%u(0.4)%>
-	eq #cz train.tmp = (#fz train.tmp + #lz train.tmp) / 2
-	execute as @e[type=minecraft:block_display,tag=train.chain,distance=..12] if score @s train.id = #self train.tmp run function train:chain/apply
+	# Chain display, from the follower's front edge to the leader's back edge, raised 0.4
+	function train:chain/render
 	# Whether the leader is still within 1.5 blocks, for a wait, before its tag goes
 	scoreboard players set #near train.tmp 0
 	execute if score @s train.wait matches 1.. if entity @e[type=#train:carts,tag=train.lead_now,distance=..1.5] run scoreboard players set #near train.tmp 1

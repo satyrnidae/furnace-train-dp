@@ -1978,6 +1978,164 @@ function t36/check {
 }
 #endregion
 
+#region Chain anchors
+# The chain runs from the follower's front edge to the leader's back edge, half a block along each cart's own rail from its center, toward the
+# other cart. Carts here are parked at a gap of 2, so nothing moves, and the real follow tick draws the display. Tolerance is 0.1 blocks
+
+# Absolute value of #t
+function lib/abs_t {
+	execute if score #t train_test matches ..-1 run scoreboard players operation #t train_test *= #m1 train_test
+}
+
+# Sets #nr to 1 when #px #pz is within 0.1 blocks of #qx #qz on both axes
+function lib/near {
+	scoreboard players set #nr train_test 1
+	scoreboard players set #m1 train_test -1
+	scoreboard players operation #t train_test = #px train_test
+	scoreboard players operation #t train_test -= #qx train_test
+	function train_test:lib/abs_t
+	execute unless score #t train_test matches ..<%u(0.1)%> run scoreboard players set #nr train_test 0
+	scoreboard players operation #t train_test = #pz train_test
+	scoreboard players operation #t train_test -= #qz train_test
+	function train_test:lib/abs_t
+	execute unless score #t train_test matches ..<%u(0.1)%> run scoreboard players set #nr train_test 0
+}
+
+# The two ends of the chain display tt.d in units, #e1x #e1z and #e2x #e2z. The display's center is its position, its length the y scale,
+# and a probe a block ahead of it gives the direction. Which end is which doesn't matter
+function lib/chain_ends {
+	execute as @e[tag=tt.d,limit=1] at @s run summon minecraft:marker ^ ^ ^1 {Tags:["tt","tt.p"]}
+	execute store result score #cx train_test run data get entity @e[tag=tt.d,limit=1] Pos[0] <%UNIT%>
+	execute store result score #cz train_test run data get entity @e[tag=tt.d,limit=1] Pos[2] <%UNIT%>
+	execute store result score #ux train_test run data get entity @e[tag=tt.p,limit=1] Pos[0] <%UNIT%>
+	execute store result score #uz train_test run data get entity @e[tag=tt.p,limit=1] Pos[2] <%UNIT%>
+	execute store result score #cl train_test run data get entity @e[tag=tt.d,limit=1] transformation.scale[1] <%UNIT%>
+	kill @e[tag=tt.p]
+	scoreboard players operation #ux train_test -= #cx train_test
+	scoreboard players operation #uz train_test -= #cz train_test
+	scoreboard players operation #ux train_test *= #cl train_test
+	scoreboard players operation #uz train_test *= #cl train_test
+	scoreboard players set #w train_test <%2 * UNIT%>
+	scoreboard players operation #ux train_test /= #w train_test
+	scoreboard players operation #uz train_test /= #w train_test
+	scoreboard players operation #e1x train_test = #cx train_test
+	scoreboard players operation #e1x train_test += #ux train_test
+	scoreboard players operation #e2x train_test = #cx train_test
+	scoreboard players operation #e2x train_test -= #ux train_test
+	scoreboard players operation #e1z train_test = #cz train_test
+	scoreboard players operation #e1z train_test += #uz train_test
+	scoreboard players operation #e2z train_test = #cz train_test
+	scoreboard players operation #e2z train_test -= #uz train_test
+}
+
+# Fails the step unless the chain's ends are the anchors #ax #az and #bx #bz, in either order
+function lib/ends_match {
+	function train_test:lib/chain_ends
+	scoreboard players operation #px train_test = #e1x train_test
+	scoreboard players operation #pz train_test = #e1z train_test
+	scoreboard players operation #qx train_test = #ax train_test
+	scoreboard players operation #qz train_test = #az train_test
+	function train_test:lib/near
+	scoreboard players operation #m1a train_test = #nr train_test
+	scoreboard players operation #px train_test = #e2x train_test
+	scoreboard players operation #pz train_test = #e2z train_test
+	scoreboard players operation #qx train_test = #bx train_test
+	scoreboard players operation #qz train_test = #bz train_test
+	function train_test:lib/near
+	scoreboard players operation #m1a train_test *= #nr train_test
+	scoreboard players operation #px train_test = #e1x train_test
+	scoreboard players operation #pz train_test = #e1z train_test
+	scoreboard players operation #qx train_test = #bx train_test
+	scoreboard players operation #qz train_test = #bz train_test
+	function train_test:lib/near
+	scoreboard players operation #m2a train_test = #nr train_test
+	scoreboard players operation #px train_test = #e2x train_test
+	scoreboard players operation #pz train_test = #e2z train_test
+	scoreboard players operation #qx train_test = #ax train_test
+	scoreboard players operation #qz train_test = #az train_test
+	function train_test:lib/near
+	scoreboard players operation #m2a train_test *= #nr train_test
+	scoreboard players operation #m1a train_test += #m2a train_test
+	execute if score #m1a train_test matches 0 run scoreboard players set #ok train_test 0
+}
+
+# Follower tt.f and leader tt.h in units, #fx #fz #lx #lz. Anchors start at the centers, a test adds its offsets
+function lib/read_pair {
+	execute store result score #fx train_test run data get entity @e[tag=tt.f,limit=1] Pos[0] <%UNIT%>
+	execute store result score #fz train_test run data get entity @e[tag=tt.f,limit=1] Pos[2] <%UNIT%>
+	execute store result score #lx train_test run data get entity @e[tag=tt.h,limit=1] Pos[0] <%UNIT%>
+	execute store result score #lz train_test run data get entity @e[tag=tt.h,limit=1] Pos[2] <%UNIT%>
+	scoreboard players operation #ax train_test = #fx train_test
+	scoreboard players operation #az train_test = #fz train_test
+	scoreboard players operation #bx train_test = #lx train_test
+	scoreboard players operation #bz train_test = #lz train_test
+}
+
+# Follower tt.f and leader tt.h coupled, with a chain display. Rails are the caller's
+function lib/anchor_pair {
+	function train_test:lib/couple_two
+	function train_test:lib/chain_display {id:"minecraft:iron_chain"}
+}
+
+# t68 a straight. Both carts on one strip, 2 apart. The ends are 0.5 in from each center, so the chain is 1 long
+function t68/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	function train_test:lib/strip
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~3 ~ ~ {Tags:["tt","tt.f"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~5 ~ ~ {Tags:["tt","tt.h"]}
+	function train_test:lib/anchor_pair
+}
+function t68/check {
+	function train_test:lib/read_pair
+	scoreboard players add #ax train_test <%u(0.5)%>
+	scoreboard players remove #bx train_test <%u(0.5)%>
+	function train_test:lib/ends_match
+	execute store result score #cl train_test run data get entity @e[tag=tt.d,limit=1] transformation.scale[1] <%UNIT%>
+	execute unless score #cl train_test matches <%u(1) - u(0.1)%>..<%u(1) + u(0.1)%> run scoreboard players set #ok train_test 0
+}
+
+# t69 a corner. The follower is the last cart on a strip going east, the leader sits on a north south strip beside its end, 1 east and 1.73
+# south of it, 2 away. The two strips aren't connected. The follower's front is east and the leader's back is north, so the chain runs from
+# 0.5 east of the follower to 0.5 north of the leader, and not from center to center
+function t69/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~ ~ ~3 ~ ~ minecraft:rail[shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run fill ~4 ~ ~1 ~4 ~ ~4 minecraft:rail[shape=north_south]
+	execute at @e[tag=tt.origin,limit=1] run setblock ~4 ~ ~ minecraft:stone
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~3 ~ ~ {Tags:["tt","tt.f"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~4 ~ ~1.732 {Tags:["tt","tt.h"]}
+	function train_test:lib/anchor_pair
+}
+function t69/check {
+	function train_test:lib/read_pair
+	scoreboard players add #ax train_test <%u(0.5)%>
+	scoreboard players remove #bz train_test <%u(0.5)%>
+	function train_test:lib/ends_match
+}
+
+# t70 a curve. The leader is parked on a curve block that joins the strip to a south going one, so its heading is diagonal. The follower is
+# straight behind it. The leader's back end is half a block back along the diagonal, 0.354 west and 0.354 north of its center
+function t70/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run fill ~ ~ ~ ~3 ~ ~ minecraft:rail[shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run setblock ~4 ~ ~ minecraft:rail[shape=south_west]
+	execute at @e[tag=tt.origin,limit=1] run setblock ~4 ~ ~1 minecraft:rail[shape=north_south]
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~2 ~ ~ {Tags:["tt","tt.f"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~4 ~ ~ {Tags:["tt","tt.h"]}
+	function train_test:lib/anchor_pair
+}
+function t70/check {
+	function train_test:lib/read_pair
+	scoreboard players add #ax train_test <%u(0.5)%>
+	scoreboard players remove #bx train_test <%u(0.35355)%>
+	scoreboard players remove #bz train_test <%u(0.35355)%>
+	function train_test:lib/ends_match
+}
+#endregion
+
 #region Gametest poll functions
 # t0 as a scenario, the stage first
 function t0/run {
