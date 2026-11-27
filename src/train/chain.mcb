@@ -75,14 +75,14 @@ function place {
 	execute store result entity @s Pos[2] double <%1 / UNIT%> run scoreboard players get #cz train.tmp
 }
 
-# As a chain display. #cx #cy #cz is the midpoint and #len the gap, in units, see scale.js
+# As a chain display. #cx #cy #cz is the midpoint and #len3 the 3D gap, in units, see scale.js
 function apply {
 	function train:chain/place
 	# Yaw and pitch toward the leader, so local z runs along the link. Aimed from 0.4 lower, otherwise the raise over the cart base tilts it toward the leader's feet
 	execute at @s positioned ~ ~-0.4 ~ facing entity @e[type=#train:carts,tag=train.lead_now,limit=1] feet run tp @s ~ ~0.4 ~ ~ ~
 	# Stretched center to center, then trimmed to the gap minus 1, so each end sits 0.5 from its cart's center. That is the cart's back face
 	# on the leader and its front face on the follower, and reads as attached
-	scoreboard players operation #clen train.tmp = #len train.tmp
+	scoreboard players operation #clen train.tmp = #len3 train.tmp
 	scoreboard players remove #clen train.tmp <%u(1.0)%>
 	execute if score #clen train.tmp matches ..<%u(0.2) - 1%> run scoreboard players set #clen train.tmp <%u(0.2)%>
 	# Rotated box is x 0..1, y -1..0, z 0..len from the corner, so the translation is -0.5, 0.5, -len/2 to center it on the entity

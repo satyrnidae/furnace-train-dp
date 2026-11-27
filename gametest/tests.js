@@ -91,6 +91,7 @@ const gametest = {
 		{ id: "t64_portal_loop_rider_mid", steps: [[1, "t64/start"], [600, "t64/check"]] },
 		{ id: "t65_portal_loop_rider_head", steps: [[1, "t65/start"], [600, "t65/check"]] },
 		{ id: "t66_portal_loop_rider_tail", steps: [[1, "t66/start"], [600, "t66/check"]] },
+		{ id: "t67_slope_chain", steps: [[1, "t67/start"], [101, "t67/check"]] },
 		// Last on purpose, running the load function sets the sweep grace again so nothing after this can count on a sweep. New tests go above it
 		{ id: "t38_chunkload_reload", steps: [[1, "chunk/reload_unset"], [2, "chunk/reload_kept"], [3, "chunk/reload_done"]] },
 	],

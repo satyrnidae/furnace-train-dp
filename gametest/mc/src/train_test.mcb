@@ -1212,6 +1212,54 @@ function t32/check {
 	execute if entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
 	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #ok train_test 0
 }
+
+# t67 the chain spans the true gap on a slope. Follower tt.f on a 45 degree ramp, 3 blocks of rise under it, leader tt.h parked on flat rail
+# at the top. The follower settles at the spacing, and the display scale must be the 3D gap minus 1, not the horizontal one. Compared squared
+# in units, the horizontal gap is 2 blocks and the 3D one is 2.83, a tolerance of 0.25 blocks separates them
+function t67/start {
+	function train_test:lib/begin
+	function train_test:lib/flat
+	execute at @e[tag=tt.origin,limit=1] run fill ~-1 ~ ~-1 ~9 ~8 ~1 minecraft:air
+	REPEAT ([0, 1, 2, 3, 4, 5]) as k {
+		execute at @e[tag=tt.origin,limit=1] run fill ~<%k%> ~-1 ~ ~<%k%> ~<%k - 1%> ~ minecraft:stone
+		execute at @e[tag=tt.origin,limit=1] run setblock ~<%k%> ~<%k%> ~ minecraft:rail[shape=ascending_east]
+	}
+	execute at @e[tag=tt.origin,limit=1] run fill ~6 ~-1 ~ ~8 ~5 ~ minecraft:stone
+	execute at @e[tag=tt.origin,limit=1] run fill ~6 ~6 ~ ~8 ~6 ~ minecraft:rail[shape=east_west]
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~3 ~3 ~ {Tags:["tt","tt.f"]}
+	execute at @e[tag=tt.origin,limit=1] run summon minecraft:minecart ~6 ~6 ~ {Tags:["tt","tt.h"]}
+	execute as @e[tag=tt.h,limit=1] run function train:link/assign_id
+	scoreboard players operation #lead train.tmp = @e[tag=tt.h,limit=1] train.id
+	execute as @e[tag=tt.f,limit=1] run function train:link/apply
+	execute as @e[tag=tt.f,limit=1] run function train:link/assign_id
+	function train_test:lib/chain_display {id:"minecraft:iron_chain"}
+}
+function t67/check {
+	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
+	execute store result score #sc train_test run data get entity @e[tag=tt.d,limit=1] transformation.scale[1] <%UNIT%>
+	scoreboard players add #sc train_test <%u(1)%>
+	execute store result score #ex train_test run data get entity @e[tag=tt.f,limit=1] Pos[0] <%UNIT%>
+	execute store result score #ey train_test run data get entity @e[tag=tt.f,limit=1] Pos[1] <%UNIT%>
+	execute store result score #ez train_test run data get entity @e[tag=tt.f,limit=1] Pos[2] <%UNIT%>
+	execute store result score #hx train_test run data get entity @e[tag=tt.h,limit=1] Pos[0] <%UNIT%>
+	execute store result score #hy train_test run data get entity @e[tag=tt.h,limit=1] Pos[1] <%UNIT%>
+	execute store result score #hz train_test run data get entity @e[tag=tt.h,limit=1] Pos[2] <%UNIT%>
+	scoreboard players operation #hx train_test -= #ex train_test
+	scoreboard players operation #hy train_test -= #ey train_test
+	scoreboard players operation #hz train_test -= #ez train_test
+	scoreboard players operation #hx train_test *= #hx train_test
+	scoreboard players operation #hy train_test *= #hy train_test
+	scoreboard players operation #hz train_test *= #hz train_test
+	scoreboard players operation #hx train_test += #hy train_test
+	scoreboard players operation #hx train_test += #hz train_test
+	scoreboard players operation #sc train_test *= #sc train_test
+	scoreboard players operation #sc train_test -= #hx train_test
+	# Squared units, 0.25 blocks at a gap of 2.83 is about 2 * 181 * 16
+	execute unless score #sc train_test matches -<%2 * u(2.83) * u(0.25)%>..<%2 * u(2.83) * u(0.25)%> run scoreboard players set #ok train_test 0
+	# The ramp is real, the gap is well over its horizontal part
+	execute unless score #hy train_test matches <%u(1) ** 2%>.. run scoreboard players set #ok train_test 0
+}
 #endregion
 
 #region Portal transit
