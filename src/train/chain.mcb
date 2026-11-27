@@ -75,15 +75,108 @@ function place {
 	execute store result entity @s Pos[2] double <%1 / UNIT%> run scoreboard players get #cz train.tmp
 }
 
-# As a chain display. #cx #cy #cz is the midpoint and #len3 the 3D gap, in units, see scale.js
+# The chain is drawn from the follower's front edge to the leader's back edge, not center to center. Each end is half a block from its cart's
+# center along the cart's own rail, toward the other cart, so on a corner the chain bows to the inside instead of cutting through the cart
+# bodies. A cart's heading is its rail, a velocity says nothing about a cart at rest. A cart that isn't on a rail has no heading, its end
+# stays at its center. Strain and breaking keep the real gap, this is only what is drawn.
+
+<%%
+// Where an end sits for each axis and which way along it, as an offset from the cart in blocks. Axis 1 is east west, 2 north south,
+// 3 runs south west to north east, 4 runs south east to north west. A diagonal half block is 0.35355 on each axis. On an ascending rail the
+// end is also 0.5 up or down, #sl is 1 when the positive side of the axis is the high one, -1 when it is the low one
+const axes = [[1, 0.5, 0], [2, 0, 0.5], [3, 0.35355, 0.35355], [4, 0.35355, -0.35355]];
+// A table of the offsets, running what follows `run` at the end. It runs at the cart, the end is a position
+for (const [name, tail] of [
+	["put", "run tp @e[type=minecraft:block_display,tag=train.chain_now,limit=1] ~ ~ ~"],
+	["aim", "facing entity @e[type=minecraft:block_display,tag=train.chain_now,limit=1] feet run tp @e[type=minecraft:block_display,tag=train.chain_now,limit=1] ~ ~ ~ ~ ~"],
+]) {
+	const lines = [`	execute if score #at train.tmp matches 0 positioned ~ ~0.4 ~ ${tail}`];
+	for (const [at, x, z] of axes) {
+		for (const sg of [1, -1]) {
+			for (const sl of at <= 2 ? [0, 1, -1] : [0]) {
+				const y = Math.round((0.4 + sg * sl * 0.5) * 10) / 10;
+				lines.push(`	execute if score #at train.tmp matches ${at} if score #sg train.tmp matches ${sg} if score #sl train.tmp matches ${sl} positioned ~${sg * x} ~${y} ~${sg * z} ${tail}`);
+			}
+		}
+	}
+	emit.mcb(`function ${name} {\n${lines.join("\n")}\n}`);
+}
+%%>
+
+# As a cart, at it. #tx #tz is the way to the other cart. Sets #at to the axis of the rail under it, 0 for none, and #sg to 1 when the end is
+# at the positive side of that axis, the side toward the other cart, and #sl to the slope along it
+function axis {
+	scoreboard players set #at train.tmp 0
+	scoreboard players set #sl train.tmp 0
+	execute if block ~ ~ ~ #minecraft:rails[shape=east_west] run scoreboard players set #at train.tmp 1
+	execute if block ~ ~ ~ #minecraft:rails[shape=ascending_east] run scoreboard players set #at train.tmp 1
+	execute if block ~ ~ ~ #minecraft:rails[shape=ascending_east] run scoreboard players set #sl train.tmp 1
+	execute if block ~ ~ ~ #minecraft:rails[shape=ascending_west] run scoreboard players set #at train.tmp 1
+	execute if block ~ ~ ~ #minecraft:rails[shape=ascending_west] run scoreboard players set #sl train.tmp -1
+	execute if block ~ ~ ~ #minecraft:rails[shape=north_south] run scoreboard players set #at train.tmp 2
+	execute if block ~ ~ ~ #minecraft:rails[shape=ascending_north] run scoreboard players set #at train.tmp 2
+	execute if block ~ ~ ~ #minecraft:rails[shape=ascending_north] run scoreboard players set #sl train.tmp -1
+	execute if block ~ ~ ~ #minecraft:rails[shape=ascending_south] run scoreboard players set #at train.tmp 2
+	execute if block ~ ~ ~ #minecraft:rails[shape=ascending_south] run scoreboard players set #sl train.tmp 1
+	execute if block ~ ~ ~ #minecraft:rails[shape=south_east] run scoreboard players set #at train.tmp 4
+	execute if block ~ ~ ~ #minecraft:rails[shape=north_west] run scoreboard players set #at train.tmp 4
+	execute if block ~ ~ ~ #minecraft:rails[shape=south_west] run scoreboard players set #at train.tmp 3
+	execute if block ~ ~ ~ #minecraft:rails[shape=north_east] run scoreboard players set #at train.tmp 3
+	# Along the axis, the vector to the other cart as a dot product
+	scoreboard players set #dot train.tmp 0
+	execute if score #at train.tmp matches 1 run eq #dot train.tmp = #tx train.tmp
+	execute if score #at train.tmp matches 2 run eq #dot train.tmp = #tz train.tmp
+	execute if score #at train.tmp matches 3 run eq #dot train.tmp = #tx train.tmp + #tz train.tmp
+	execute if score #at train.tmp matches 4 run eq #dot train.tmp = #tx train.tmp - #tz train.tmp
+	scoreboard players set #sg train.tmp 1
+	execute if score #dot train.tmp matches ..-1 run scoreboard players set #sg train.tmp -1
+}
+
+# As the leader, at it. The chain display is put at the leader's end, its back edge
+function leader_end {
+	eq #tx train.tmp = 0 - #dx train.tmp
+	eq #tz train.tmp = 0 - #dz train.tmp
+	function train:chain/axis
+	function train:chain/put
+}
+
+# As a follower, at it, with the leader tagged train.lead_now and #dx #dz #len3 from the sample. Draws its chain. The display goes to the
+# leader's end, then to the follower's end, looking at the leader's from there, which aims it along the link. The ends are read off it
+function render {
+	execute as @e[type=minecraft:block_display,tag=train.chain,distance=..12] if score @s train.id = #self train.tmp run tag @s add train.chain_now
+	execute unless entity @e[type=minecraft:block_display,tag=train.chain_now,limit=1] run return 0
+	execute as @e[type=#train:carts,tag=train.lead_now,limit=1] at @s run function train:chain/leader_end
+	execute store result score #bx train.tmp run data get entity @e[type=minecraft:block_display,tag=train.chain_now,limit=1] Pos[0] <%UNIT%>
+	execute store result score #by train.tmp run data get entity @e[type=minecraft:block_display,tag=train.chain_now,limit=1] Pos[1] <%UNIT%>
+	execute store result score #bz train.tmp run data get entity @e[type=minecraft:block_display,tag=train.chain_now,limit=1] Pos[2] <%UNIT%>
+	eq #tx train.tmp = #dx train.tmp
+	eq #tz train.tmp = #dz train.tmp
+	function train:chain/axis
+	function train:chain/aim
+	execute store result score #ax train.tmp run data get entity @e[type=minecraft:block_display,tag=train.chain_now,limit=1] Pos[0] <%UNIT%>
+	execute store result score #ay train.tmp run data get entity @e[type=minecraft:block_display,tag=train.chain_now,limit=1] Pos[1] <%UNIT%>
+	execute store result score #az train.tmp run data get entity @e[type=minecraft:block_display,tag=train.chain_now,limit=1] Pos[2] <%UNIT%>
+	# The midpoint of the ends, and their 3D distance. Newton seeded at the gap between the carts, the ends are never farther apart than
+	# that plus 1, and it is never 0
+	eq #cx train.tmp = (#ax train.tmp + #bx train.tmp) / 2
+	eq #cy train.tmp = (#ay train.tmp + #by train.tmp) / 2
+	eq #cz train.tmp = (#az train.tmp + #bz train.tmp) / 2
+	eq #ex train.tmp = #bx train.tmp - #ax train.tmp
+	eq #ey train.tmp = #by train.tmp - #ay train.tmp
+	eq #ez train.tmp = #bz train.tmp - #az train.tmp
+	eq #dsq3 train.tmp = #ex train.tmp * #ex train.tmp + #ey train.tmp * #ey train.tmp + #ez train.tmp * #ez train.tmp
+	function train:follow/sqrt3
+	function train:follow/sqrt3
+	function train:follow/sqrt3
+	execute as @e[type=minecraft:block_display,tag=train.chain_now,limit=1] run function train:chain/apply
+	tag @e[type=minecraft:block_display,tag=train.chain_now] remove train.chain_now
+}
+
+# As a chain display. #cx #cy #cz is the midpoint and #len3 the distance between its ends, in units, see scale.js. Its facing is already
+# set, the length never goes under 0.2 so ends that cross don't turn the box inside out
 function apply {
 	function train:chain/place
-	# Yaw and pitch toward the leader, so local z runs along the link. Aimed from 0.4 lower, otherwise the raise over the cart base tilts it toward the leader's feet
-	execute at @s positioned ~ ~-0.4 ~ facing entity @e[type=#train:carts,tag=train.lead_now,limit=1] feet run tp @s ~ ~0.4 ~ ~ ~
-	# Stretched center to center, then trimmed to the gap minus 1, so each end sits 0.5 from its cart's center. That is the cart's back face
-	# on the leader and its front face on the follower, and reads as attached
 	scoreboard players operation #clen train.tmp = #len3 train.tmp
-	scoreboard players remove #clen train.tmp <%u(1.0)%>
 	execute if score #clen train.tmp matches ..<%u(0.2) - 1%> run scoreboard players set #clen train.tmp <%u(0.2)%>
 	# Rotated box is x 0..1, y -1..0, z 0..len from the corner, so the translation is -0.5, 0.5, -len/2 to center it on the entity
 	data modify storage train:tmp tf set value {translation:[-0.5f,0.5f,-0.75f],left_rotation:[0.70711f,0f,0f,0.70711f],scale:[1f,1.5f,1f],right_rotation:[0f,0f,0f,1f]}
