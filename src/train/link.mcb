@@ -4,6 +4,7 @@
 import ../../scale.js
 import ../objectives.js
 import ../text/link.js
+import ../text/advancement.js
 
 # As the player, with the clicked cart tagged train.target
 function use {
@@ -38,6 +39,7 @@ function second {
 	tag @e[type=#train:carts,tag=train.target] remove train.target
 	execute if score #ok train.tmp matches 1 run clear @s[gamemode=!creative] #train:couplers 1
 	execute if score #ok train.tmp matches 1 run title @s[tag=!global.ignore.gui] actionbar <%linkText.coupled%>
+	execute if score #ok train.tmp matches 1 run advancement grant @s only train:link/chain_gang
 	execute if score #ok train.tmp matches 0 run title @s[tag=!global.ignore.gui] actionbar <%linkText.cancelled%>
 }
 
@@ -132,4 +134,24 @@ function uninstall train:uninstall {
 	REPEAT (objectives.link) as o {
 		scoreboard objectives remove train.<%o%>
 	}
+}
+
+# First coupling by a player, granted from train:link/second. Nothing in vanilla fires on it, so the criterion can't be met on its own
+advancement chain_gang {
+	"display": {
+		"title": <%advText.chainGangTitle%>,
+		"description": <%advText.chainGangDescription%>,
+		"icon": {"id": "minecraft:iron_chain"},
+		"frame": "task",
+		"show_toast": true,
+		"announce_to_chat": true
+	},
+	"parent": "train:root",
+	"criteria": {
+		"couple": {"trigger": "minecraft:impossible"}
+	}
+}
+
+function uninstall train:uninstall {
+	advancement revoke @a from train:root
 }
