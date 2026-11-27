@@ -62,6 +62,16 @@ function tick {
 	function train:follow/align
 	scoreboard players operation @s train.cdet = #detour train.tmp
 
+	# Chain length. The chain is aimed in 3D, so on a slope it takes the 3D gap, #len3. #len stays horizontal, the heading math needs it
+	# that way. Newton seeded at horizontal plus rise, which is never under the root, so two steps settle it
+	eq #dy train.tmp = #ly train.tmp - #fy train.tmp
+	eq #dsq3 train.tmp = #dsq train.tmp + #dy train.tmp * #dy train.tmp
+	abs #dy train.tmp
+	scoreboard players operation #len3 train.tmp = #len train.tmp
+	scoreboard players operation #len3 train.tmp += #dy train.tmp
+	function train:follow/sqrt3
+	function train:follow/sqrt3
+
 	# Chain display at the midpoint, raised 0.4
 	eq #cx train.tmp = (#fx train.tmp + #lx train.tmp) / 2
 	eq #cy train.tmp = (#fy train.tmp + #ly train.tmp) / 2 + <%u(0.4)%>
@@ -361,6 +371,14 @@ function sqrt {
 	scoreboard players operation #q train.tmp /= #len train.tmp
 	scoreboard players operation #len train.tmp += #q train.tmp
 	scoreboard players operation #len train.tmp /= #2 train.const
+}
+
+# One newton step on the 3D gap, #len3 = (#len3 + #dsq3 / #len3) / 2
+function sqrt3 {
+	scoreboard players operation #q train.tmp = #dsq3 train.tmp
+	scoreboard players operation #q train.tmp /= #len3 train.tmp
+	scoreboard players operation #len3 train.tmp += #q train.tmp
+	scoreboard players operation #len3 train.tmp /= #2 train.const
 }
 
 # A follower on a powered rail. The rail adds 0.06 to any moving cart after the Motion write, so ask for 0.06 less.
