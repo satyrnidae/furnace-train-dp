@@ -33,3 +33,7 @@ Every chat, action bar and advancement string is defined in `src/text/*.js` as a
 ## AI Usage Disclosure
 
 This datapack's code was developed with a big ol' plagiarism machine (Claude Code by Anthropic). No art asset files were generated using the LLM.
+
+## License
+
+CC0 1.0 Universal, see `LICENSE`.
