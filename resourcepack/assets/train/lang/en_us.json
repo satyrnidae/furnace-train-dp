@@ -1,6 +1,8 @@
 {
-  "train.advancement.root.description": "Chain furnace minecarts into self-driving trains!",
-  "train.advancement.root.title": "Furnace Minecart Trains",
+  "train.advancement.chain_gang.description": "Attach two carts with a chain",
+  "train.advancement.chain_gang.title": "Chain Gang",
+  "train.advancement.root.description": "Attach minecarts together in trains!",
+  "train.advancement.root.title": "Furnace Train Carts",
   "train.link.cancelled": "Coupler: cancelled",
   "train.link.coupled": "Coupled",
   "train.link.first": "Coupler: click the cart behind it",

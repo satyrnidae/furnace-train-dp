@@ -103,6 +103,7 @@ function tick minecraft:tick {
 # The pack's node of the datapack advancement tree, under the author node of src/global.mcb
 advancement root {
 	"display": {
+		"frame": "challenge",
 		"title": <%advText.rootTitle%>,
 		"description": <%advText.rootDescription%>,
 		"icon": {"id": "minecraft:furnace_minecart"},

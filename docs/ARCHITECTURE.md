@@ -162,7 +162,7 @@ A follower whose leader isn't within 8 blocks but exists in another dimension ho
 
 Follows the [datapack conventions](https://mc-datapacks.github.io/en/):
 
-- Advancement tree: `global:root`, `global:satyrnidae/author`, then `train:root`. The global nodes are the same files in every pack by satyrnidae.
+- Advancement tree: `global:root`, `global:satyrnidae/author`, `train:root`, then `train:link/chain_gang`, granted by `train:link/second` on a first coupling. The global nodes are the same files in every pack by satyrnidae.
 - `global.ignore`, `global.ignore.pos`, `global.ignore.kill` on carts, `global.ignore.gui` on players.
 - `train:uninstall` removes everything the pack made and disables it. It runs `#train:uninstall`, a tag each module adds its own `function uninstall train:uninstall` to, then removes the shared objectives and the pack by name.
 - No message on reload.
