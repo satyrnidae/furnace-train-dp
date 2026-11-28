@@ -72,7 +72,7 @@ const serverLog = `${result.stdout || ""}${result.stderr || ""}`;
 // The newest run's log, for whoever looks after a run, each run has its own folder and it is gone when the run is
 fs.writeFileSync(path.join(server, "run.log"), serverLog);
 // The log lines the tests write with say, the dump of a failing step and the PASS and FAIL of each step, plus anything the server complains about
-for (const line of serverLog.split("\n")) if (/\bgt (dump|FAIL|PASS|shape)\b/.test(line)) console.log(line.replace(/^\[[^\]]*\] \[[^\]]*\]: (\[[^\]]*\] )*/, "  "));
+for (const line of serverLog.split("\n")) if (/\bgt (dump|why|FAIL|PASS|shape)\b/.test(line)) console.log(line.replace(/^\[[^\]]*\] \[[^\]]*\]: (\[[^\]]*\] )*/, "  "));
 // A function that fails to parse only warns and the rest of the pack carries on, so it fails the run here, a test calling it would otherwise do nothing
 const loadErrors = [...serverLog.matchAll(/Failed to load function (\S+)/g)].map((m) => m[1]);
 for (const name of new Set(loadErrors)) console.error(`FAIL function did not load: ${name}`);

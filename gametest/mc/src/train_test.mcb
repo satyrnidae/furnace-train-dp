@@ -18,6 +18,11 @@ function load minecraft:load {
 # which the old scale of 1000 did at 2.1 million, so nothing here is built at the command block. It would still be fine now, the arena just stays put. The structure only carries the start,
 # command, accept and fail blocks. The chunks of the arena are forceloaded by the gametest pack at load, see gametest/generate.js
 function lib/begin {
+	data merge storage train_test:dump {path:-99999}
+	# Everything the last stage built above the floor goes first, and the sweep of items below comes after it. A stage taller than lib/flat
+	# clears, t67 climbs to 6 above the floor, leaves blocks that lose their support when lib/flat clears under them and drop as items
+	# after the sweep, a stray item that fails the next test of the run. 12 high, to 24 south for the snapshot of lib/ref
+	execute positioned 100.5 64 100.5 run fill ~-1 ~ ~-4 ~46 ~12 ~24 minecraft:air
 	function train_test:lib/cleanup
 	kill @e[tag=tt.origin]
 	scoreboard players set #noavoid train.const 0
@@ -41,9 +46,19 @@ function lib/cleanup {
 	scoreboard players set #chunkload train.const 1
 }
 
+# Macro, at names the assertion, function and the nth fail in it. Fails the step and says where. A step can trip several, the first one
+# logged is usually the cause and the rest follow from it
+function lib/fail {
+	scoreboard players set #ok train_test 0
+	$say gt why $(at)
+}
+
 # Printed when a step fails. State of the head tt.h, if there is one, so a log is enough to see why. A headless server logs say and not tellraw.
 # A score that is unset prints as -99999, x and z are whole blocks
 function lib/dump {
+	function train_test:lib/dump_clock
+	execute unless entity @e[tag=tt.f] run say gt dump there is no tt.f entity
+	execute as @e[tag=tt.f,limit=1] at @s run function train_test:lib/dump_follower
 	execute unless loaded 100 64 100 run say gt dump the arena chunk is not loaded
 	execute unless entity @e[tag=tt.origin] run say gt dump there is no origin marker
 	execute at @e[tag=tt.origin,limit=1] unless block ~ ~-1 ~ minecraft:stone run say gt dump no stone floor under the origin
@@ -74,6 +89,64 @@ function lib/dump_one {
 	execute at @s unless entity @e[tag=tt.origin,distance=..8] run say gt dump the origin marker is far from the head
 }
 
+# Where the test sits on the clocks. Trace slots come from the id and #gen, so a failure that only shows in some runs is read against these
+function lib/dump_clock {
+	execute store result storage train_test:dump gametime int 1 run time query gametime
+	execute store result storage train_test:dump clock int 1 run scoreboard players get #clock train_test
+	execute store result storage train_test:dump gen int 1 run scoreboard players get #gen train.tmp
+	execute store result storage train_test:dump next int 1 run scoreboard players get #next train.id
+	function train_test:lib/dump_clock_say with storage train_test:dump
+}
+function lib/dump_clock_say {
+	$say gt dump gametime=$(gametime) clock=$(clock) gen=$(gen) next=$(next) path=$(path) need=<%u(1.75)%>
+	execute at @e[tag=tt.origin,limit=1] as @e[type=minecraft:item,distance=..64] run function train_test:lib/dump_item
+	execute in minecraft:the_nether positioned 100.5 64 100.5 as @e[type=minecraft:item,distance=..64] run function train_test:lib/dump_item
+	execute store result score #n train_test if entity @e[type=minecraft:block_display,tag=train.chain]
+	execute if score #n train_test matches 1.. run say gt dump chain displays alive in this dimension
+	execute if score #n train_test matches 1.. as @e[type=minecraft:block_display,tag=train.chain] run function train_test:lib/dump_display
+}
+
+# As an item, at it. What it is and how long it has existed, a stray one is from an earlier test if its age is past the start of this one
+function lib/dump_item {
+	data modify storage train_test:dump itemid set from entity @s Item.id
+	execute store result storage train_test:dump itemage int 1 run data get entity @s Age
+	function train_test:lib/dump_item_say with storage train_test:dump
+}
+function lib/dump_item_say {
+	$say gt dump stray item $(itemid) age=$(itemage)
+}
+
+# As a chain display
+function lib/dump_display {
+	execute store result storage train_test:dump dx int 1 run data get entity @s Pos[0] 1
+	execute store result storage train_test:dump dz int 1 run data get entity @s Pos[2] 1
+	function train_test:lib/dump_display_say with storage train_test:dump
+}
+function lib/dump_display_say {
+	$say gt dump display at $(dx) $(dz)
+}
+
+# As the follower tt.f, at it
+function lib/dump_follower {
+	data merge storage train_test:dump {lost:-99999,strain:-99999,wait:-99999,id:-99999,tx:0,tz:0}
+	execute if score @s train.lost matches -2147483648..2147483647 store result storage train_test:dump lost int 1 run scoreboard players get @s train.lost
+	execute if score @s train.strain matches -2147483648..2147483647 store result storage train_test:dump strain int 1 run scoreboard players get @s train.strain
+	execute if score @s train.wait matches -2147483648..2147483647 store result storage train_test:dump wait int 1 run scoreboard players get @s train.wait
+	execute if score @s train.id matches -2147483648..2147483647 store result storage train_test:dump id int 1 run scoreboard players get @s train.id
+	execute store result storage train_test:dump tx int 1 run data get entity @s Pos[0] 1
+	execute store result storage train_test:dump tz int 1 run data get entity @s Pos[2] 1
+	function train_test:lib/dump_follower_say with storage train_test:dump
+	execute if dimension minecraft:the_nether run say gt dump the follower is in the nether
+	execute unless dimension minecraft:the_nether run say gt dump the follower is not in the nether
+	execute unless entity @e[tag=tt.d] run say gt dump there is no chain display
+	execute if entity @e[tag=tt.d,distance=..4] run say gt dump the chain display is within 4 of the follower
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run say gt dump an item dropped in the overworld arena
+	execute in minecraft:the_nether positioned 100.5 64 100.5 if entity @e[type=minecraft:item,distance=..64] run say gt dump an item dropped in the nether arena
+}
+function lib/dump_follower_say {
+	$say gt dump follower id=$(id) lost=$(lost) strain=$(strain) wait=$(wait) x=$(tx) z=$(tz)
+}
+
 function lib/dump_say {
 	$say gt dump halt=$(halt) dir=$(dir) gap=$(gap) svx=$(svx) svz=$(svz) motion_x=$(mx) push_x=$(px) x=$(x) z=$(z) fuel=$(fuel)
 }
@@ -93,7 +166,7 @@ function lib/ref {
 
 # Sets #ok train_test to 0 unless the stage still equals the snapshot
 function lib/ref_check {
-	execute at @e[tag=tt.origin,limit=1] unless blocks ~-1 ~-1 ~-4 ~46 ~4 ~4 ~-1 ~-1 ~16 all run scoreboard players set #ok train_test 0
+	execute at @e[tag=tt.origin,limit=1] unless blocks ~-1 ~-1 ~-4 ~46 ~4 ~4 ~-1 ~-1 ~16 all run function train_test:lib/fail {at:"lib/ref_check#1"}
 }
 
 # t10 a real head-on, braking off. Two fueled furnaces meet in the middle
@@ -110,12 +183,12 @@ function t10/start {
 }
 function t10/check {
 	scoreboard players set #ok train_test 1
-	execute if entity @e[type=minecraft:furnace_minecart,tag=tt] run scoreboard players set #ok train_test 0
+	execute if entity @e[type=minecraft:furnace_minecart,tag=tt] run function train_test:lib/fail {at:"t10/check#1"}
 	execute store result score #n train_test at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:furnace_minecart"}},distance=..64]
-	execute unless score #n train_test matches 2 run scoreboard players set #ok train_test 0
-	execute if entity @e[tag=tt.near,nbt={Health:10.0f}] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.near] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.far,nbt={Health:10.0f}] run scoreboard players set #ok train_test 0
+	execute unless score #n train_test matches 2 run function train_test:lib/fail {at:"t10/check#2"}
+	execute if entity @e[tag=tt.near,nbt={Health:10.0f}] run function train_test:lib/fail {at:"t10/check#3"}
+	execute unless entity @e[tag=tt.near] run function train_test:lib/fail {at:"t10/check#4"}
+	execute unless entity @e[tag=tt.far,nbt={Health:10.0f}] run function train_test:lib/fail {at:"t10/check#5"}
 	function train_test:lib/ref_check
 }
 
@@ -130,8 +203,8 @@ function t11/start {
 }
 function t11/check {
 	scoreboard players set #ok train_test 1
-	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.a] run function train_test:lib/fail {at:"t11/check#1"}
+	execute unless entity @e[tag=tt.b] run function train_test:lib/fail {at:"t11/check#2"}
 	# They have to have touched. b starts 2.0 away and creeps 1.25 at the most, so within 1.6 means it got there. With braking on b stops
 	# short and this test used to pass without any contact
 	execute store result score #ax train_test run data get entity @e[tag=tt.a,limit=1] Pos[0] <%UNIT%>
@@ -139,7 +212,7 @@ function t11/check {
 	scoreboard players operation #dd train_test = #bx train_test
 	scoreboard players operation #dd train_test -= #ax train_test
 	execute if score #dd train_test matches ..-1 run scoreboard players operation #dd train_test *= #-1 train.const
-	execute unless score #dd train_test matches ..<%u(1.6)%> run scoreboard players set #ok train_test 0
+	execute unless score #dd train_test matches ..<%u(1.6)%> run function train_test:lib/fail {at:"t11/check#3"}
 }
 
 # t12 two furnaces of one train in a hard closing contact do not explode. Velocities are set by hand so only the train rule is under test
@@ -154,8 +227,8 @@ function t12/start {
 	function train_test:lib/hard_closing
 	function train:crash/tick
 	scoreboard players set #ok train_test 1
-	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.a] run function train_test:lib/fail {at:"t12/start#1"}
+	execute unless entity @e[tag=tt.b] run function train_test:lib/fail {at:"t12/start#2"}
 }
 
 # Positions into the sampler scores and a closing speed of 0.6 between tt.a and tt.b, a moving right and b moving left
@@ -179,8 +252,8 @@ function t13/start {
 }
 function t13/check {
 	scoreboard players set #ok train_test 1
-	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.a] run function train_test:lib/fail {at:"t13/check#1"}
+	execute unless entity @e[tag=tt.b] run function train_test:lib/fail {at:"t13/check#2"}
 }
 
 # t14 different trains in a hard closing contact explode, and a coupled cart standing 2 blocks from the impact is untouched
@@ -196,10 +269,10 @@ function t14/start {
 	function train_test:lib/hard_closing
 	function train:crash/tick
 	scoreboard players set #ok train_test 1
-	execute if entity @e[type=minecraft:furnace_minecart,tag=tt] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.f] run scoreboard players set #ok train_test 0
+	execute if entity @e[type=minecraft:furnace_minecart,tag=tt] run function train_test:lib/fail {at:"t14/start#1"}
+	execute unless entity @e[tag=tt.f] run function train_test:lib/fail {at:"t14/start#2"}
 	execute store result score #n train_test at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:furnace_minecart"}},distance=..64]
-	execute unless score #n train_test matches 2 run scoreboard players set #ok train_test 0
+	execute unless score #n train_test matches 2 run function train_test:lib/fail {at:"t14/start#3"}
 }
 #endregion
 
@@ -214,12 +287,12 @@ function lib/head {
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~3 ~ ~ {Tags:["tt","tt.h"],Fuel:3000s,PushX:1.0d,PushZ:0.0d}
 }
 
-# Asserts for a head tt.h that should be yielding in front of a parked cart tt.x: still alive, halt 3, speed under 0.01, at least 2.0
-# blocks of path between them, nothing blown up. Distance is manhattan so it also holds on a curve
+# Asserts for a head tt.h that should be yielding in front of a parked cart tt.x: still alive, halt 3, speed under 0.01, at least 1.75
+# blocks of path between them, the stop target is 2.5 and the trace phase moves it by up to about 0.125 on a curve, nothing blown up. Distance is manhattan so it also holds on a curve
 function lib/stopped_short {
 	scoreboard players set #ok train_test 1
-	execute unless entity @e[tag=tt.h] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.h,scores={train.halt=3,train.svx=-<%u(0.02)%>..<%u(0.02)%>,train.svz=-<%u(0.02)%>..<%u(0.02)%>}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h] run function train_test:lib/fail {at:"lib/stopped_short#1"}
+	execute unless entity @e[tag=tt.h,scores={train.halt=3,train.svx=-<%u(0.02)%>..<%u(0.02)%>,train.svz=-<%u(0.02)%>..<%u(0.02)%>}] run function train_test:lib/fail {at:"lib/stopped_short#2"}
 	execute store result score #hx train_test run data get entity @e[tag=tt.h,limit=1] Pos[0] <%UNIT%>
 	execute store result score #hz train_test run data get entity @e[tag=tt.h,limit=1] Pos[2] <%UNIT%>
 	execute store result score #px train_test run data get entity @e[tag=tt.x,limit=1] Pos[0] <%UNIT%>
@@ -231,8 +304,10 @@ function lib/stopped_short {
 	scoreboard players operation #dz train_test -= #hz train_test
 	execute if score #dz train_test matches ..-1 run scoreboard players operation #dz train_test *= #-1 train.const
 	scoreboard players operation #dx train_test += #dz train_test
-	execute unless score #dx train_test matches <%u(2)%>.. run scoreboard players set #ok train_test 0
-	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #ok train_test 0
+	# Kept for the dump, the whole-block positions it prints are too coarse to see a miss of a few hundredths
+	execute store result storage train_test:dump path int 1 run scoreboard players get #dx train_test
+	execute unless score #dx train_test matches <%u(1.75)%>.. run function train_test:lib/fail {at:"lib/stopped_short#3"}
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run function train_test:lib/fail {at:"lib/stopped_short#4"}
 }
 
 # t2 a head stops short of a lone parked cart
@@ -283,7 +358,7 @@ function t4/pop {
 }
 function t4/check {
 	scoreboard players set #ok train_test 1
-	execute unless entity @e[tag=tt.h,scores={train.halt=0,train.svx=<%u(0.1)%>..}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.halt=0,train.svx=<%u(0.1)%>..}] run function train_test:lib/fail {at:"t4/check#1"}
 }
 
 # t5 two heads with ids 7 apart trace on different ticks
@@ -299,13 +374,13 @@ function t5/start {
 }
 function t5/check {
 	scoreboard players set #ok train_test 1
-	execute unless entity @e[tag=tt.a,scores={train.chk=1..}] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.b,scores={train.chk=1..}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.a,scores={train.chk=1..}] run function train_test:lib/fail {at:"t5/check#1"}
+	execute unless entity @e[tag=tt.b,scores={train.chk=1..}] run function train_test:lib/fail {at:"t5/check#2"}
 	scoreboard players operation #a train_test = @e[tag=tt.a,limit=1] train.chk
 	scoreboard players operation #a train_test %= #period train.const
 	scoreboard players operation #b train_test = @e[tag=tt.b,limit=1] train.chk
 	scoreboard players operation #b train_test %= #period train.const
-	execute if score #a train_test = #b train_test run scoreboard players set #ok train_test 0
+	execute if score #a train_test = #b train_test run function train_test:lib/fail {at:"t5/check#3"}
 }
 
 # t6 a head with no heading yet does not trace and does not yield, even with a cart 2 blocks ahead
@@ -318,8 +393,8 @@ function t6/start {
 }
 function t6/check {
 	scoreboard players set #ok train_test 1
-	execute if entity @e[tag=tt.h,scores={train.halt=3}] run scoreboard players set #ok train_test 0
-	execute if score @e[tag=tt.h,limit=1] train.gap matches -2147483648..2147483647 run scoreboard players set #ok train_test 0
+	execute if entity @e[tag=tt.h,scores={train.halt=3}] run function train_test:lib/fail {at:"t6/check#1"}
+	execute if score @e[tag=tt.h,limit=1] train.gap matches -2147483648..2147483647 run function train_test:lib/fail {at:"t6/check#2"}
 }
 
 # t7 a foreign cart in the head's own block is gap 0, the head holds, no division by zero. One tick, no movement
@@ -333,7 +408,7 @@ function t7/start {
 	execute as @e[tag=tt.h,limit=1] run function train:avoid/trace
 	execute as @e[tag=tt.h,limit=1] run function train:avoid/head
 	scoreboard players set #ok train_test 1
-	execute unless entity @e[tag=tt.h,scores={train.halt=3,train.gap=0}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.halt=3,train.gap=0}] run function train_test:lib/fail {at:"t7/start#1"}
 }
 
 # t8 the same stop on a curve. East along 11 rails, a curve south, then south, the parked cart at the end
@@ -424,8 +499,8 @@ emit.mcb(`function trace/shapes {\n\tscoreboard players set #ok train_test 1\n${
 function trace/shoot {
 	scoreboard players set #gap train.tmp -1
 	execute as @e[tag=tt.h,limit=1] run function train:trace/run
-	execute unless score #gap train.tmp = #want train_test run scoreboard players set #ok train_test 0
-	execute if entity @e[tag=train.mine] run scoreboard players set #ok train_test 0
+	execute unless score #gap train.tmp = #want train_test run function train_test:lib/fail {at:"trace/shoot#1"}
+	execute if entity @e[tag=train.mine] run function train_test:lib/fail {at:"trace/shoot#2"}
 }
 
 # Heading east on flat rails, a curve south, then straight south, the cart is 9 blocks along the path
@@ -597,10 +672,10 @@ function t20/check {
 	scoreboard players operation #d1 train_test -= #fx train_test
 	scoreboard players operation #d2 train_test = #fx train_test
 	scoreboard players operation #d2 train_test -= #gx train_test
-	execute unless score #d1 train_test matches <%u(1.65)%>..<%u(2.35)%> run scoreboard players set #ok train_test 0
-	execute unless score #d2 train_test matches <%u(1.65)%>..<%u(2.35)%> run scoreboard players set #ok train_test 0
+	execute unless score #d1 train_test matches <%u(1.65)%>..<%u(2.35)%> run function train_test:lib/fail {at:"t20/check#1"}
+	execute unless score #d2 train_test matches <%u(1.65)%>..<%u(2.35)%> run function train_test:lib/fail {at:"t20/check#2"}
 	# It went somewhere, the head started at x 3 of the origin and the strip is 45 long
-	execute at @e[tag=tt.origin,limit=1] unless entity @e[tag=tt.h,distance=8..] run scoreboard players set #ok train_test 0
+	execute at @e[tag=tt.origin,limit=1] unless entity @e[tag=tt.h,distance=8..] run function train_test:lib/fail {at:"t20/check#3"}
 }
 # t52, a follower stretched to 6 blocks from the cart ahead, what a delayed trip through a portal leaves behind it. The head and the first
 # follower are moved 4 blocks on at tick 30, and the last cart has to close up on its own and keep its chain
@@ -612,12 +687,12 @@ function t52/stretch {
 	execute as @e[tag=tt.f,limit=1] at @s run tp @s ~4 ~ ~
 }
 function t52/check {
-	execute unless entity @e[tag=tt.g,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.g,tag=train.follower] run function train_test:lib/fail {at:"t52/check#1"}
 	execute store result score #fx train_test run data get entity @e[tag=tt.f,limit=1] Pos[0] <%UNIT%>
 	execute store result score #gx train_test run data get entity @e[tag=tt.g,limit=1] Pos[0] <%UNIT%>
 	scoreboard players operation #d2 train_test = #fx train_test
 	scoreboard players operation #d2 train_test -= #gx train_test
-	execute unless score #d2 train_test matches <%u(1.65)%>..<%u(2.5)%> run scoreboard players set #ok train_test 0
+	execute unless score #d2 train_test matches <%u(1.65)%>..<%u(2.5)%> run function train_test:lib/fail {at:"t52/check#2"}
 }
 #endregion
 
@@ -631,7 +706,7 @@ function far/start {
 	function train_test:lib/cleanup
 	kill @e[tag=tt.origin]
 	scoreboard players set #noavoid train.const 0
-	execute unless loaded 25000000 64 100 run scoreboard players set #ok train_test 0
+	execute unless loaded 25000000 64 100 run function train_test:lib/fail {at:"far/start#1"}
 	execute positioned 25000000.5 64 100.5 run summon minecraft:marker ~ ~ ~ {Tags:["tt","tt.origin"]}
 	function train_test:lib/flat
 	function train_test:lib/strip
@@ -653,8 +728,8 @@ function t17/run {
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:furnace_minecart ~10.3 ~ ~1 {Tags:["tt","tt.b"]}
 	function train_test:lib/hard_closing
 	function train:crash/tick
-	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.a] run function train_test:lib/fail {at:"t17/run#1"}
+	execute unless entity @e[tag=tt.b] run function train_test:lib/fail {at:"t17/run#2"}
 }
 #endregion
 
@@ -672,7 +747,7 @@ function t18/reverse {
 	data merge entity @e[tag=tt.h,limit=1] {PushX:-1.0d,PushZ:0.0d,Fuel:3000s}
 }
 function t18/check {
-	execute unless entity @e[tag=tt.h,scores={train.halt=0,train.svx=..-<%u(0.1)%>}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.halt=0,train.svx=..-<%u(0.1)%>}] run function train_test:lib/fail {at:"t18/check#1"}
 }
 #endregion
 
@@ -724,15 +799,15 @@ function t15/run {
 	# Diagonal, 0.2 east and 0.21 south, z is ahead by 5 percent, not a change of heading
 	execute as @e[tag=tt.h,limit=1] at @s run tp @s ~0.2 ~ ~0.21
 	execute as @e[tag=tt.h,limit=1] at @s run function train:sample/cart
-	execute unless entity @e[tag=tt.h,scores={train.dir=1}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.dir=1}] run function train_test:lib/fail {at:"t15/run#1"}
 	# Diagonal the other way, 0.2 east and 0.19 north, still east
 	execute as @e[tag=tt.h,limit=1] at @s run tp @s ~0.2 ~ ~-0.19
 	execute as @e[tag=tt.h,limit=1] at @s run function train:sample/cart
-	execute unless entity @e[tag=tt.h,scores={train.dir=1}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.dir=1}] run function train_test:lib/fail {at:"t15/run#2"}
 	# A clear move north does change it
 	execute as @e[tag=tt.h,limit=1] at @s run tp @s ~ ~ ~-0.2
 	execute as @e[tag=tt.h,limit=1] at @s run function train:sample/cart
-	execute unless entity @e[tag=tt.h,scores={train.dir=0}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.dir=0}] run function train_test:lib/fail {at:"t15/run#3"}
 }
 #endregion
 
@@ -753,14 +828,14 @@ function t1/check {
 	scoreboard players set #ok train_test 1
 	scoreboard players set #v train_test -9999
 	execute store result score #v train_test run scoreboard players get @e[tag=tt.a,limit=1] train.svx
-	execute unless score #v train_test matches <%u(0.1)%>..<%u(0.25)%> run scoreboard players set #ok train_test 0
+	execute unless score #v train_test matches <%u(0.1)%>..<%u(0.25)%> run function train_test:lib/fail {at:"t1/check#1"}
 	scoreboard players set #v train_test -9999
 	execute store result score #v train_test run scoreboard players get @e[tag=tt.a,limit=1] train.dir
-	execute unless score #v train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #v train_test matches 1 run function train_test:lib/fail {at:"t1/check#2"}
 	scoreboard players set #v train_test -9999
 	execute store result score #v train_test run scoreboard players get @e[tag=tt.b,limit=1] train.svx
-	execute unless score #v train_test matches -<%u(0.02)%>..<%u(0.02)%> run scoreboard players set #ok train_test 0
-	execute if score @e[tag=tt.b,limit=1] train.dir matches -100..100 run scoreboard players set #ok train_test 0
+	execute unless score #v train_test matches -<%u(0.02)%>..<%u(0.02)%> run function train_test:lib/fail {at:"t1/check#3"}
+	execute if score @e[tag=tt.b,limit=1] train.dir matches -100..100 run function train_test:lib/fail {at:"t1/check#4"}
 }
 
 function t1/tp {
@@ -772,7 +847,7 @@ function t1/check_tp {
 	scoreboard players set #ok train_test 1
 	scoreboard players set #v train_test -9999
 	execute store result score #v train_test run scoreboard players get @e[tag=tt.c,limit=1] train.svx
-	execute unless score #v train_test matches 0 run scoreboard players set #ok train_test 0
+	execute unless score #v train_test matches 0 run function train_test:lib/fail {at:"t1/check_tp#1"}
 }
 
 # root_of on a follower is its head, on a lone cart a new id of its own
@@ -788,10 +863,10 @@ function t1/roots {
 	scoreboard players operation #r1 train_test = #root train.tmp
 	execute as @e[tag=tt.c,limit=1] run function train:sample/root_of
 	scoreboard players operation #r2 train_test = #root train.tmp
-	execute unless score #r0 train_test = #aid train_test run scoreboard players set #ok train_test 0
-	execute unless score #r1 train_test = #aid train_test run scoreboard players set #ok train_test 0
-	execute if score #r2 train_test = #aid train_test run scoreboard players set #ok train_test 0
-	execute unless score #r2 train_test matches 1.. run scoreboard players set #ok train_test 0
+	execute unless score #r0 train_test = #aid train_test run function train_test:lib/fail {at:"t1/roots#1"}
+	execute unless score #r1 train_test = #aid train_test run function train_test:lib/fail {at:"t1/roots#2"}
+	execute if score #r2 train_test = #aid train_test run function train_test:lib/fail {at:"t1/roots#3"}
+	execute unless score #r2 train_test matches 1.. run function train_test:lib/fail {at:"t1/roots#4"}
 }
 #endregion
 
@@ -806,19 +881,19 @@ function self_check {
 		emit.mcb(`execute unless score #x train_test matches 1 run scoreboard players set #ok train_test 0`);
 		%%>
 	}
-	execute unless score #period train.const matches 20 run scoreboard players set #ok train_test 0
-	execute unless score #reach train.const matches 16 run scoreboard players set #ok train_test 0
-	execute unless score #stop train.const matches <%u(2.5)%> run scoreboard players set #ok train_test 0
-	execute unless score #hit train.const matches <%u(0.1)%> run scoreboard players set #ok train_test 0
-	execute unless score #10 train.const matches 10 run scoreboard players set #ok train_test 0
-	execute unless score #noavoid train.const matches 0 run scoreboard players set #ok train_test 0
+	execute unless score #period train.const matches 20 run function train_test:lib/fail {at:"self_check#1"}
+	execute unless score #reach train.const matches 16 run function train_test:lib/fail {at:"self_check#2"}
+	execute unless score #stop train.const matches <%u(2.5)%> run function train_test:lib/fail {at:"self_check#3"}
+	execute unless score #hit train.const matches <%u(0.1)%> run function train_test:lib/fail {at:"self_check#4"}
+	execute unless score #10 train.const matches 10 run function train_test:lib/fail {at:"self_check#5"}
+	execute unless score #noavoid train.const matches 0 run function train_test:lib/fail {at:"self_check#6"}
 
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:hopper_minecart ~ ~ ~ {Tags:["tt","tt.probe"]}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:tnt_minecart ~ ~ ~ {Tags:["tt","tt.probe"]}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:spawner_minecart ~ ~ ~ {Tags:["tt","tt.probe"]}
 	execute at @e[tag=tt.origin,limit=1] run summon minecraft:command_block_minecart ~ ~ ~ {Tags:["tt","tt.probe"]}
 	execute store result score #n train_test if entity @e[type=#train:carts,tag=tt.probe]
-	execute unless score #n train_test matches 4 run scoreboard players set #ok train_test 0
+	execute unless score #n train_test matches 4 run function train_test:lib/fail {at:"self_check#7"}
 
 }
 #endregion
@@ -859,8 +934,8 @@ function t22/run {
 	execute as @e[tag=tt.h,limit=1] run function train:head/snap
 	execute as @e[tag=tt.h,limit=1] at @s run function train:sample/cart
 	scoreboard players set #ok train_test 1
-	execute unless entity @e[tag=tt.h,scores={train.svx=0,train.svz=0}] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.h,scores={train.halt=1}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.svx=0,train.svz=0}] run function train_test:lib/fail {at:"t22/run#1"}
+	execute unless entity @e[tag=tt.h,scores={train.halt=1}] run function train_test:lib/fail {at:"t22/run#2"}
 }
 
 # t23 gap aging. Per tick the gap shrinks by the distance travelled along the heading and not at all when the head drifts the other way,
@@ -915,9 +990,9 @@ function t24/run {
 	scoreboard players set @e[tag=tt.b,limit=1] train.svx 0
 	function train:crash/tick
 	scoreboard players set #ok train_test 1
-	execute if entity @e[type=minecraft:furnace_minecart,tag=tt] run scoreboard players set #ok train_test 0
+	execute if entity @e[type=minecraft:furnace_minecart,tag=tt] run function train_test:lib/fail {at:"t24/run#1"}
 	execute store result score #n train_test at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:furnace_minecart"}},distance=..64]
-	execute unless score #n train_test matches 2 run scoreboard players set #ok train_test 0
+	execute unless score #n train_test matches 2 run function train_test:lib/fail {at:"t24/run#2"}
 }
 
 # t24 again with the carts on rails one block apart. Last tick hard, now both read 0, and the sideways offset of 1.0 still says they passed
@@ -936,8 +1011,8 @@ function t24/parallel {
 	scoreboard players set @e[tag=tt.b,limit=1] train.svx 0
 	function train:crash/tick
 	scoreboard players set #ok train_test 1
-	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.a] run function train_test:lib/fail {at:"t24/parallel#1"}
+	execute unless entity @e[tag=tt.b] run function train_test:lib/fail {at:"t24/parallel#2"}
 }
 
 # Powered rail, unpowered, at block 11 of the strip. The cart ahead is 14 along, a head from 3 starts yielding about 4.5 blocks out, at 9.5,
@@ -958,9 +1033,9 @@ function t25/start {
 }
 function t25/at_rail {
 	scoreboard players set #ok train_test 1
-	execute unless entity @e[tag=tt.h,scores={train.halt=1}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.halt=1}] run function train_test:lib/fail {at:"t25/at_rail#1"}
 	execute store result score #hx train_test run data get entity @e[tag=tt.h,limit=1] Pos[0] <%UNIT%>
-	execute unless score #hx train_test matches <%u(111.4)%>..<%u(111.6)%> run scoreboard players set #ok train_test 0
+	execute unless score #hx train_test matches <%u(111.4)%>..<%u(111.6)%> run function train_test:lib/fail {at:"t25/at_rail#2"}
 }
 function t25/power {
 	execute at @e[tag=tt.origin,limit=1] run setblock ~11 ~ ~1 minecraft:redstone_block
@@ -981,12 +1056,12 @@ function t26/run {
 	scoreboard players set #ok train_test 1
 	scoreboard players set @e[tag=tt.h,limit=1] train.halt 1
 	execute as @e[tag=tt.h,limit=1] at @s run function train:avoid/head
-	execute unless entity @e[tag=tt.h,scores={train.halt=1}] run scoreboard players set #ok train_test 0
-	execute if score @e[tag=tt.h,limit=1] train.gap matches -2147483648..2147483647 run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.halt=1}] run function train_test:lib/fail {at:"t26/run#1"}
+	execute if score @e[tag=tt.h,limit=1] train.gap matches -2147483648..2147483647 run function train_test:lib/fail {at:"t26/run#2"}
 	scoreboard players set @e[tag=tt.h,limit=1] train.halt 2
 	execute as @e[tag=tt.h,limit=1] at @s run function train:avoid/head
-	execute unless entity @e[tag=tt.h,scores={train.halt=2}] run scoreboard players set #ok train_test 0
-	execute if score @e[tag=tt.h,limit=1] train.gap matches -2147483648..2147483647 run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.h,scores={train.halt=2}] run function train_test:lib/fail {at:"t26/run#3"}
+	execute if score @e[tag=tt.h,limit=1] train.gap matches -2147483648..2147483647 run function train_test:lib/fail {at:"t26/run#4"}
 }
 
 # Head tt.h with two coupled followers, tt.f then tt.g. The follower kinds come from the caller through the summon lines of the tests
@@ -1008,8 +1083,8 @@ function lib/spacing_check {
 	scoreboard players operation #d1 train_test -= #fx train_test
 	scoreboard players operation #d2 train_test = #fx train_test
 	scoreboard players operation #d2 train_test -= #gx train_test
-	execute unless score #d1 train_test matches <%u(1.65)%>..<%u(2.35)%> run scoreboard players set #ok train_test 0
-	execute unless score #d2 train_test matches <%u(1.65)%>..<%u(2.35)%> run scoreboard players set #ok train_test 0
+	execute unless score #d1 train_test matches <%u(1.65)%>..<%u(2.35)%> run function train_test:lib/fail {at:"lib/spacing_check#1"}
+	execute unless score #d2 train_test matches <%u(1.65)%>..<%u(2.35)%> run function train_test:lib/fail {at:"lib/spacing_check#2"}
 }
 
 # t27 a head with two followers moving at speed brakes for a parked cart, the followers close up behind it one after the other and nothing
@@ -1026,8 +1101,8 @@ function t27/start {
 }
 function t27/check {
 	function train_test:lib/stopped_short
-	execute unless entity @e[tag=tt.f] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.g] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f] run function train_test:lib/fail {at:"t27/check#1"}
+	execute unless entity @e[tag=tt.g] run function train_test:lib/fail {at:"t27/check#2"}
 	function train_test:lib/spacing_check
 }
 
@@ -1046,8 +1121,8 @@ function t28/start {
 }
 function t28/check {
 	function train_test:lib/stopped_short
-	execute unless entity @e[tag=tt.f] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.g] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f] run function train_test:lib/fail {at:"t28/check#1"}
+	execute unless entity @e[tag=tt.g] run function train_test:lib/fail {at:"t28/check#2"}
 }
 #endregion
 
@@ -1060,7 +1135,7 @@ function chunk/start {
 	kill @e[tag=tt.origin]
 	scoreboard players set #noavoid train.const 0
 	scoreboard players set #ok train_test 1
-	execute unless loaded 3010 64 3004 run scoreboard players set #ok train_test 0
+	execute unless loaded 3010 64 3004 run function train_test:lib/fail {at:"chunk/start#1"}
 	execute positioned 3010.5 64 3004.5 run summon minecraft:marker ~ ~ ~ {Tags:["tt","tt.origin"]}
 	execute at @e[tag=tt.origin,limit=1] run fill ~-1 ~-1 ~ ~5 ~-1 ~ minecraft:stone
 	execute at @e[tag=tt.origin,limit=1] run fill ~-1 ~ ~ ~5 ~3 ~ minecraft:air
@@ -1074,16 +1149,16 @@ function chunk/start {
 function chunk/claimed {
 	scoreboard players set #ok train_test 1
 	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3004
-	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 1 run function train_test:lib/fail {at:"chunk/claimed#1"}
 	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3008
-	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 1 run function train_test:lib/fail {at:"chunk/claimed#2"}
 	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3008
-	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 1 run function train_test:lib/fail {at:"chunk/claimed#3"}
 	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3004
-	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 1 run function train_test:lib/fail {at:"chunk/claimed#4"}
 	# A chunk no square reaches is not claimed
 	execute in minecraft:overworld store success score #q train_test run forceload query 2976 3004
-	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 0 run function train_test:lib/fail {at:"chunk/claimed#5"}
 }
 # #chunkload 0, the same train as t29 claims nothing. The test's own forced chunk stays forced
 function chunk/off_start {
@@ -1093,13 +1168,13 @@ function chunk/off_start {
 function chunk/off_check {
 	scoreboard players set #ok train_test 1
 	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3004
-	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 0 run function train_test:lib/fail {at:"chunk/off_check#1"}
 	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3008
-	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 0 run function train_test:lib/fail {at:"chunk/off_check#2"}
 	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3008
-	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 0 run function train_test:lib/fail {at:"chunk/off_check#3"}
 	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3004
-	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 1 run function train_test:lib/fail {at:"chunk/off_check#4"}
 }
 # Back on, the claims return without touching the train
 function chunk/on {
@@ -1114,13 +1189,13 @@ function chunk/reload_unset {
 	scoreboard players set #ok train_test 1
 	scoreboard players reset #chunkload train.const
 	function train:load
-	execute unless score #chunkload train.const matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #chunkload train.const matches 1 run function train_test:lib/fail {at:"chunk/reload_unset#1"}
 	scoreboard players set #chunkload train.const 0
 	function train:load
 }
 function chunk/reload_kept {
 	scoreboard players set #ok train_test 1
-	execute unless score #chunkload train.const matches 0 run scoreboard players set #ok train_test 0
+	execute unless score #chunkload train.const matches 0 run function train_test:lib/fail {at:"chunk/reload_kept#1"}
 }
 function chunk/reload_done {
 	scoreboard players set #chunkload train.const 1
@@ -1132,13 +1207,13 @@ function chunk/derail {
 function chunk/released {
 	scoreboard players set #ok train_test 1
 	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3004
-	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 0 run function train_test:lib/fail {at:"chunk/released#1"}
 	execute in minecraft:overworld store success score #q train_test run forceload query 2992 3008
-	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 0 run function train_test:lib/fail {at:"chunk/released#2"}
 	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3008
-	execute unless score #q train_test matches 0 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 0 run function train_test:lib/fail {at:"chunk/released#3"}
 	execute in minecraft:overworld store success score #q train_test run forceload query 3008 3004
-	execute unless score #q train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #q train_test matches 1 run function train_test:lib/fail {at:"chunk/released#4"}
 	function train_test:lib/cleanup
 }
 #endregion
@@ -1178,14 +1253,14 @@ function t30/start {
 	execute at @e[tag=tt.origin,limit=1] run setblock ~4 ~ ~ minecraft:stone
 }
 function t30/still {
-	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t30/still#1"}
+	execute unless entity @e[tag=tt.d] run function train_test:lib/fail {at:"t30/still#2"}
 }
 function t30/check {
-	execute if entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute if entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
-	execute at @e[tag=tt.origin,limit=1] unless entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:copper_chain"}}] run scoreboard players set #ok train_test 0
-	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:iron_chain"}}] run scoreboard players set #ok train_test 0
+	execute if entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t30/check#1"}
+	execute if entity @e[tag=tt.d] run function train_test:lib/fail {at:"t30/check#2"}
+	execute at @e[tag=tt.origin,limit=1] unless entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:copper_chain"}}] run function train_test:lib/fail {at:"t30/check#3"}
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:iron_chain"}}] run function train_test:lib/fail {at:"t30/check#4"}
 }
 
 # t31 a gap that is over 5 blocks for only a moment does not break the chain. The same pair on open track, the follower closes the 6 blocks
@@ -1194,9 +1269,9 @@ function t31/start {
 	function train_test:lib/far_pair
 }
 function t31/check {
-	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
-	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:copper_chain"}}] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t31/check#1"}
+	execute unless entity @e[tag=tt.d] run function train_test:lib/fail {at:"t31/check#2"}
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:copper_chain"}}] run function train_test:lib/fail {at:"t31/check#3"}
 }
 
 # t32 a cut by a creative player drops nothing. uncouple sets #nodrop before it unlinks, here it is set by hand. The chain is gone, the
@@ -1208,9 +1283,9 @@ function t32/start {
 	scoreboard players set #nodrop train.tmp 0
 }
 function t32/check {
-	execute if entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute if entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
-	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #ok train_test 0
+	execute if entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t32/check#1"}
+	execute if entity @e[tag=tt.d] run function train_test:lib/fail {at:"t32/check#2"}
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run function train_test:lib/fail {at:"t32/check#3"}
 }
 
 # t67 the chain spans the true gap on a slope. Follower tt.f on a 45 degree ramp, 3 blocks of rise under it, leader tt.h parked on flat rail
@@ -1235,8 +1310,8 @@ function t67/start {
 	function train_test:lib/chain_display {id:"minecraft:iron_chain"}
 }
 function t67/check {
-	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t67/check#1"}
+	execute unless entity @e[tag=tt.d] run function train_test:lib/fail {at:"t67/check#2"}
 	execute store result score #sc train_test run data get entity @e[tag=tt.d,limit=1] transformation.scale[1] <%UNIT%>
 	scoreboard players add #sc train_test <%u(1)%>
 	execute store result score #ex train_test run data get entity @e[tag=tt.f,limit=1] Pos[0] <%UNIT%>
@@ -1256,9 +1331,9 @@ function t67/check {
 	scoreboard players operation #sc train_test *= #sc train_test
 	scoreboard players operation #sc train_test -= #hx train_test
 	# Squared units, 0.25 blocks at a gap of 2.83 is about 2 * 181 * 16
-	execute unless score #sc train_test matches -<%2 * u(2.83) * u(0.25)%>..<%2 * u(2.83) * u(0.25)%> run scoreboard players set #ok train_test 0
+	execute unless score #sc train_test matches -<%2 * u(2.83) * u(0.25)%>..<%2 * u(2.83) * u(0.25)%> run function train_test:lib/fail {at:"t67/check#3"}
 	# The ramp is real, the gap is well over its horizontal part
-	execute unless score #hy train_test matches <%u(1) ** 2%>.. run scoreboard players set #ok train_test 0
+	execute unless score #hy train_test matches <%u(1) ** 2%>.. run function train_test:lib/fail {at:"t67/check#4"}
 }
 #endregion
 
@@ -1277,7 +1352,7 @@ function lib/nether_floor {
 function lib/portal_pair {
 	function train_test:lib/far_pair
 	function train_test:lib/nether_floor
-	execute in minecraft:the_nether unless loaded 100 64 100 run scoreboard players set #ok train_test 0
+	execute in minecraft:the_nether unless loaded 100 64 100 run function train_test:lib/fail {at:"lib/portal_pair#1"}
 	execute in minecraft:the_nether run tp @e[tag=tt.h,limit=1] 109.5 64 100.5 0 0
 }
 
@@ -1286,9 +1361,9 @@ function t59/start {
 	function train_test:lib/portal_pair
 }
 function t59/check {
-	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
-	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t59/check#1"}
+	execute unless entity @e[tag=tt.d] run function train_test:lib/fail {at:"t59/check#2"}
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run function train_test:lib/fail {at:"t59/check#3"}
 }
 
 # t34 a leader that never comes back is not waited on forever. A little before the hold is up the follower is still linked, well past it the
@@ -1298,14 +1373,14 @@ function t60/start {
 }
 function t60/near {
 	function train_test:t59/check
-	execute unless score #holdmax train.const matches 56.. run scoreboard players set #ok train_test 0
+	execute unless score #holdmax train.const matches 56.. run function train_test:lib/fail {at:"t60/near#1"}
 }
 function t60/check {
-	execute unless score #holdmax train.const matches ..90 run scoreboard players set #ok train_test 0
-	execute if entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute if entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
-	execute at @e[tag=tt.origin,limit=1] unless entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:copper_chain"}}] run scoreboard players set #ok train_test 0
-	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:iron_chain"}}] run scoreboard players set #ok train_test 0
+	execute unless score #holdmax train.const matches ..90 run function train_test:lib/fail {at:"t60/check#1"}
+	execute if entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t60/check#2"}
+	execute if entity @e[tag=tt.d] run function train_test:lib/fail {at:"t60/check#3"}
+	execute at @e[tag=tt.origin,limit=1] unless entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:copper_chain"}}] run function train_test:lib/fail {at:"t60/check#4"}
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64,nbt={Item:{id:"minecraft:iron_chain"}}] run function train_test:lib/fail {at:"t60/check#5"}
 }
 
 # t35 the follower crosses after the leader. It lands 3 blocks from it, the link is back on, the display came along and sits at the follower,
@@ -1318,10 +1393,10 @@ function t61/follow {
 	execute in minecraft:the_nether run tp @e[tag=tt.f,limit=1] 106.5 64 100.5 0 0
 }
 function t61/check {
-	execute unless entity @e[tag=tt.f,tag=train.follower,scores={train.strain=0}] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
-	execute as @e[tag=tt.f,limit=1] at @s unless entity @e[tag=tt.d,distance=..4] run scoreboard players set #ok train_test 0
-	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f,tag=train.follower,scores={train.strain=0}] run function train_test:lib/fail {at:"t61/check#1"}
+	execute unless entity @e[tag=tt.d] run function train_test:lib/fail {at:"t61/check#2"}
+	execute as @e[tag=tt.f,limit=1] at @s unless entity @e[tag=tt.d,distance=..4] run function train_test:lib/fail {at:"t61/check#3"}
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run function train_test:lib/fail {at:"t61/check#4"}
 }
 
 # t36 a leader that is gone for good, not just in another dimension, still frees the follower at once. The hold is only for a leader
@@ -1331,9 +1406,9 @@ function t62/start {
 	kill @e[tag=tt.h]
 }
 function t62/check {
-	execute if entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute if entity @e[tag=tt.d] run scoreboard players set #ok train_test 0
-	execute unless entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:copper_chain"}}] run scoreboard players set #ok train_test 0
+	execute if entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t62/check#1"}
+	execute if entity @e[tag=tt.d] run function train_test:lib/fail {at:"t62/check#2"}
+	execute unless entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:copper_chain"}}] run function train_test:lib/fail {at:"t62/check#3"}
 }
 
 # t56 a leader that is in this dimension but far away is not held for. 25 blocks east on the same strip, it frees the follower at once, display
@@ -1352,8 +1427,8 @@ function t57/start {
 }
 function t57/check {
 	execute store result score #fx train_test run data get entity @e[tag=tt.f,limit=1] Pos[0] <%UNIT%>
-	execute unless score #fx train_test matches <%u(104.8)%>.. run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless score #fx train_test matches <%u(104.8)%>.. run function train_test:lib/fail {at:"t57/check#1"}
+	execute unless entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t57/check#2"}
 }
 
 # t53 the same through a real portal. A fueled head and a follower roll east on a rail into an obsidian frame with portal blocks in it, at
@@ -1395,7 +1470,7 @@ function lib/portal_stage {
 	function train_test:lib/cleanup
 	kill @e[tag=tt.origin]
 	scoreboard players set #noavoid train.const 0
-	execute unless loaded 820 64 800 run scoreboard players set #ok train_test 0
+	execute unless loaded 820 64 800 run function train_test:lib/fail {at:"lib/portal_stage#1"}
 	execute positioned 800.5 64 800.5 run summon minecraft:marker ~ ~ ~ {Tags:["tt","tt.origin"]}
 	# Items left at the stage by an earlier test, cleanup above only reaches the arena at 100 100
 	execute positioned 800.5 64 800.5 run kill @e[type=minecraft:item,distance=..64]
@@ -1412,10 +1487,10 @@ function lib/portal_stage {
 
 function t53/check {
 	scoreboard players set #pwatch train_test 0
-	execute unless score #held train_test matches 1 run scoreboard players set #ok train_test 0
-	execute if score #broke train_test matches 1 run scoreboard players set #ok train_test 0
-	execute unless score #relinked train_test matches 1 run scoreboard players set #ok train_test 0
-	execute if score #items train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #held train_test matches 1 run function train_test:lib/fail {at:"t53/check#1"}
+	execute if score #broke train_test matches 1 run function train_test:lib/fail {at:"t53/check#2"}
+	execute unless score #relinked train_test matches 1 run function train_test:lib/fail {at:"t53/check#3"}
+	execute if score #items train_test matches 1 run function train_test:lib/fail {at:"t53/check#4"}
 }
 
 # A four cart train on the portal stage, furnace tt.h, chest tt.f with 4 charcoal in slot 0, minecart tt.g, minecart tt.k, 2 blocks apart
@@ -1452,10 +1527,10 @@ function t54/start {
 }
 function t54/check {
 	scoreboard players set #pwatch train_test 0
-	execute unless score #held train_test matches 1 run scoreboard players set #ok train_test 0
-	execute if score #broke train_test matches 1 run scoreboard players set #ok train_test 0
-	execute unless score #relinked train_test matches 1 run scoreboard players set #ok train_test 0
-	execute if score #items train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #held train_test matches 1 run function train_test:lib/fail {at:"t54/check#1"}
+	execute if score #broke train_test matches 1 run function train_test:lib/fail {at:"t54/check#2"}
+	execute unless score #relinked train_test matches 1 run function train_test:lib/fail {at:"t54/check#3"}
+	execute if score #items train_test matches 1 run function train_test:lib/fail {at:"t54/check#4"}
 }
 
 # t55 refuel across the threshold. The same four carts, with the head down to 60 ticks of fuel the moment it is in the nether and the chest
@@ -1468,15 +1543,15 @@ function t55/start {
 }
 function t55/check {
 	scoreboard players set #pwatch train_test 0
-	execute unless score #held train_test matches 1 run scoreboard players set #ok train_test 0
-	execute if score #broke train_test matches 1 run scoreboard players set #ok train_test 0
-	execute unless score #relinked train_test matches 1 run scoreboard players set #ok train_test 0
-	execute unless score #fset train_test matches 1 run scoreboard players set #ok train_test 0
-	execute unless score #fedcross train_test matches 1 run scoreboard players set #ok train_test 0
-	execute if score #outage train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #held train_test matches 1 run function train_test:lib/fail {at:"t55/check#1"}
+	execute if score #broke train_test matches 1 run function train_test:lib/fail {at:"t55/check#2"}
+	execute unless score #relinked train_test matches 1 run function train_test:lib/fail {at:"t55/check#3"}
+	execute unless score #fset train_test matches 1 run function train_test:lib/fail {at:"t55/check#4"}
+	execute unless score #fedcross train_test matches 1 run function train_test:lib/fail {at:"t55/check#5"}
+	execute if score #outage train_test matches 1 run function train_test:lib/fail {at:"t55/check#6"}
 	execute store result score #cnt train_test run data get entity @e[tag=tt.f,limit=1] Items[{Slot:0b}].count
-	execute unless score #cnt train_test matches 3 run scoreboard players set #ok train_test 0
-	execute if score #items train_test matches 1 run scoreboard players set #ok train_test 0
+	execute unless score #cnt train_test matches 3 run function train_test:lib/fail {at:"t55/check#7"}
+	execute if score #items train_test matches 1 run function train_test:lib/fail {at:"t55/check#8"}
 }
 
 # Every tick while #pwatch is 1, the real portal tests. #ncar carts in the train and #nfol followers of them, set by the test. The carts are
@@ -1639,24 +1714,24 @@ function t63/pair {
 	$execute store result score #xa train_test run data get entity @e[tag=$(a),limit=1] Pos[0] <%UNIT%>
 	$execute store result score #xb train_test run data get entity @e[tag=$(b),limit=1] Pos[0] <%UNIT%>
 	$execute unless score #xb train_test > #xa train_test run say gt fail out of order $(a) $(b)
-	execute unless score #xb train_test > #xa train_test run scoreboard players set #ok train_test 0
+	execute unless score #xb train_test > #xa train_test run function train_test:lib/fail {at:"t63/pair#1"}
 }
 # Macro, why. Fails the test and says which assertion
 function t63/fail {
 	$say gt fail $(why)
-	scoreboard players set #ok train_test 0
+	function train_test:lib/fail {at:"t63/fail#1"}
 }
 function t58/check {
 	scoreboard players set #pwatch train_test 0
 	scoreboard players set #plong train_test 0
 	function train_test:lib/long_dump
-	execute if score #broke train_test matches 1 run scoreboard players set #ok train_test 0
-	execute if score #order train_test matches 1 run scoreboard players set #ok train_test 0
-	execute if score #bunch train_test matches 1 run scoreboard players set #ok train_test 0
-	execute if score #items train_test matches 1 run scoreboard players set #ok train_test 0
-	execute unless score #inn train_test matches 8 run scoreboard players set #ok train_test 0
-	execute unless score #nl train_test matches 7 run scoreboard players set #ok train_test 0
-	execute unless score #held train_test matches 1 run scoreboard players set #ok train_test 0
+	execute if score #broke train_test matches 1 run function train_test:lib/fail {at:"t58/check#1"}
+	execute if score #order train_test matches 1 run function train_test:lib/fail {at:"t58/check#2"}
+	execute if score #bunch train_test matches 1 run function train_test:lib/fail {at:"t58/check#3"}
+	execute if score #items train_test matches 1 run function train_test:lib/fail {at:"t58/check#4"}
+	execute unless score #inn train_test matches 8 run function train_test:lib/fail {at:"t58/check#5"}
+	execute unless score #nl train_test matches 7 run function train_test:lib/fail {at:"t58/check#6"}
+	execute unless score #held train_test matches 1 run function train_test:lib/fail {at:"t58/check#7"}
 }
 function lib/long_dump {
 	say gt long broke/order/bunch/in nether/settled:
@@ -1745,19 +1820,19 @@ function t43/mark {
 }
 function t43/check {
 	# The link is gone, not just a train that happens to be at rest
-	execute if entity @e[tag=tt.a,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.a] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.b] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.c] run scoreboard players set #ok train_test 0
+	execute if entity @e[tag=tt.a,tag=train.follower] run function train_test:lib/fail {at:"t43/check#1"}
+	execute unless entity @e[tag=tt.a] run function train_test:lib/fail {at:"t43/check#2"}
+	execute unless entity @e[tag=tt.b] run function train_test:lib/fail {at:"t43/check#3"}
+	execute unless entity @e[tag=tt.c] run function train_test:lib/fail {at:"t43/check#4"}
 	execute store result score #qa train_test run data get entity @e[tag=tt.a,limit=1] Pos[0] <%UNIT%>
 	execute store result score #qb train_test run data get entity @e[tag=tt.b,limit=1] Pos[0] <%UNIT%>
 	execute store result score #qc train_test run data get entity @e[tag=tt.c,limit=1] Pos[0] <%UNIT%>
 	scoreboard players operation #qa train_test -= #pa train_test
 	scoreboard players operation #qb train_test -= #pb train_test
 	scoreboard players operation #qc train_test -= #pc train_test
-	execute unless score #qa train_test matches -<%u(2)%>..<%u(2)%> run scoreboard players set #ok train_test 0
-	execute unless score #qb train_test matches -<%u(2)%>..<%u(2)%> run scoreboard players set #ok train_test 0
-	execute unless score #qc train_test matches -<%u(2)%>..<%u(2)%> run scoreboard players set #ok train_test 0
+	execute unless score #qa train_test matches -<%u(2)%>..<%u(2)%> run function train_test:lib/fail {at:"t43/check#5"}
+	execute unless score #qb train_test matches -<%u(2)%>..<%u(2)%> run function train_test:lib/fail {at:"t43/check#6"}
+	execute unless score #qc train_test matches -<%u(2)%>..<%u(2)%> run function train_test:lib/fail {at:"t43/check#7"}
 }
 
 # t44 a link that would close a loop is refused. b follows a and c follows b, then a following c is a loop of three and a following b is one
@@ -1776,13 +1851,13 @@ function t44/run {
 	execute as @e[tag=tt.b,limit=1] run function train:link/apply
 	scoreboard players operation #lead train.tmp = @e[tag=tt.b,limit=1] train.id
 	execute as @e[tag=tt.c,limit=1] run function train:link/apply
-	execute unless entity @e[tag=tt.b,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.c,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.b,tag=train.follower] run function train_test:lib/fail {at:"t44/run#1"}
+	execute unless entity @e[tag=tt.c,tag=train.follower] run function train_test:lib/fail {at:"t44/run#2"}
 	scoreboard players operation #lead train.tmp = @e[tag=tt.c,limit=1] train.id
 	execute as @e[tag=tt.a,limit=1] run function train:link/apply
 	scoreboard players operation #lead train.tmp = @e[tag=tt.b,limit=1] train.id
 	execute as @e[tag=tt.a,limit=1] run function train:link/apply
-	execute if entity @e[tag=tt.a,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute if entity @e[tag=tt.a,tag=train.follower] run function train_test:lib/fail {at:"t44/run#3"}
 }
 
 # t45 three rails a block apart, a leader on the first, its follower on the third and an unlinked cart on the middle one, level with the line
@@ -1800,7 +1875,7 @@ function t45/start {
 	execute as @e[tag=tt.f,limit=1] run function train:link/apply
 }
 function t45/check {
-	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t45/check#1"}
 }
 
 # t46 a cart that follows the follower and sits between it and the leader, on a rail 3 blocks up. Another level, so the chain stays
@@ -1821,7 +1896,7 @@ function t46/start {
 	execute as @e[tag=tt.m,limit=1] run function train:link/apply
 }
 function t46/check {
-	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t46/check#1"}
 }
 
 # t47 a train in a row stays coupled while it runs. The cart behind a follower is never in the way of the line to its leader
@@ -1835,8 +1910,8 @@ function t47/start {
 	function train_test:lib/couple_three
 }
 function t47/check {
-	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.g,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t47/check#1"}
+	execute unless entity @e[tag=tt.g,tag=train.follower] run function train_test:lib/fail {at:"t47/check#2"}
 }
 #endregion
 
@@ -1883,13 +1958,13 @@ function t33/watch {
 	execute if score #rz train_test matches ..<%u(1.0) - 1%> if score #rx train_test > #maxx train_test run scoreboard players operation #maxx train_test = #rx train_test
 	scoreboard players operation #back train_test = #maxx train_test
 	scoreboard players operation #back train_test -= #rx train_test
-	execute if score #rz train_test matches ..<%u(1.0) - 1%> if score #back train_test matches <%u(0.15) + 1%>.. run scoreboard players set #ok train_test 0
+	execute if score #rz train_test matches ..<%u(1.0) - 1%> if score #back train_test matches <%u(0.15) + 1%>.. run function train_test:lib/fail {at:"t33/watch#1"}
 }
 # The follower made the turn, it is on the return leg, and the chain held
 function t33/end {
 	function train_test:lib/rel_f
-	execute unless score #rz train_test matches <%u(1.5)%>.. run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless score #rz train_test matches <%u(1.5)%>.. run function train_test:lib/fail {at:"t33/end#1"}
+	execute unless entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t33/end#2"}
 }
 
 # t34 pulling a cart along a parallel track. The strips are 3 apart and not connected, so the follower's rails never lead to the head and the
@@ -1906,12 +1981,12 @@ function t34/start {
 }
 function t34/dragged {
 	function train_test:lib/rel_f
-	execute unless score #rx train_test matches ..<%u(5.3)%> run scoreboard players set #ok train_test 0
+	execute unless score #rx train_test matches ..<%u(5.3)%> run function train_test:lib/fail {at:"t34/dragged#1"}
 }
 function t34/pulled {
 	function train_test:lib/rel_f
-	execute unless score #rx train_test matches <%u(15)%>.. run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless score #rx train_test matches <%u(15)%>.. run function train_test:lib/fail {at:"t34/pulled#1"}
+	execute unless entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"t34/pulled#2"}
 }
 
 # Bunching. Coupled carts never get closer than half a block, center to center, at any poll. A fix to the follower controller once
@@ -1924,7 +1999,7 @@ function lib/pair_gap {
 	scoreboard players operation #pdx train_test *= #pdx train_test
 	scoreboard players operation #pdz train_test *= #pdz train_test
 	scoreboard players operation #pdx train_test += #pdz train_test
-	execute if score #pdx train_test matches ..<%u(0.5) ** 2 - 1%> run scoreboard players set #ok train_test 0
+	execute if score #pdx train_test matches ..<%u(0.5) ** 2 - 1%> run function train_test:lib/fail {at:"lib/pair_gap#1"}
 }
 function bunch/watch {
 	execute store result score #pax train_test run data get entity @e[tag=tt.h,limit=1] Pos[0] <%UNIT%>
@@ -1937,8 +2012,8 @@ function bunch/watch {
 	execute store result score #pbx train_test run data get entity @e[tag=tt.g,limit=1] Pos[0] <%UNIT%>
 	execute store result score #pbz train_test run data get entity @e[tag=tt.g,limit=1] Pos[2] <%UNIT%>
 	function train_test:lib/pair_gap
-	execute unless entity @e[tag=tt.f,tag=train.follower] run scoreboard players set #ok train_test 0
-	execute unless entity @e[tag=tt.g,tag=train.follower] run scoreboard players set #ok train_test 0
+	execute unless entity @e[tag=tt.f,tag=train.follower] run function train_test:lib/fail {at:"bunch/watch#1"}
+	execute unless entity @e[tag=tt.g,tag=train.follower] run function train_test:lib/fail {at:"bunch/watch#2"}
 }
 
 # t35 a head with two followers brakes for a parked cart on a straight, the followers close up behind it
@@ -2056,7 +2131,7 @@ function lib/ends_match {
 	function train_test:lib/near
 	scoreboard players operation #m2a train_test *= #nr train_test
 	scoreboard players operation #m1a train_test += #m2a train_test
-	execute if score #m1a train_test matches 0 run scoreboard players set #ok train_test 0
+	execute if score #m1a train_test matches 0 run function train_test:lib/fail {at:"lib/ends_match#1"}
 }
 
 # Follower tt.f and leader tt.h in units, #fx #fz #lx #lz. Anchors start at the centers, a test adds its offsets
@@ -2092,7 +2167,7 @@ function t68/check {
 	scoreboard players remove #bx train_test <%u(0.5)%>
 	function train_test:lib/ends_match
 	execute store result score #cl train_test run data get entity @e[tag=tt.d,limit=1] transformation.scale[1] <%UNIT%>
-	execute unless score #cl train_test matches <%u(1) - u(0.1)%>..<%u(1) + u(0.1)%> run scoreboard players set #ok train_test 0
+	execute unless score #cl train_test matches <%u(1) - u(0.1)%>..<%u(1) + u(0.1)%> run function train_test:lib/fail {at:"t68/check#1"}
 }
 
 # t69 a corner. The follower is the last cart on a strip going east, the leader sits on a north south strip beside its end, 1 east and 1.73
@@ -2133,6 +2208,22 @@ function t70/check {
 	scoreboard players remove #bx train_test <%u(0.35355)%>
 	scoreboard players remove #bz train_test <%u(0.35355)%>
 	function train_test:lib/ends_match
+}
+#endregion
+
+#region Stage reset
+# t71 the stage of one test leaves nothing behind for the next. The runner picks the order, and t67 builds a ramp taller than lib/flat clears,
+# so the next test's lib/flat used to drop the rails on it as items after lib/begin had swept them, and a stray rail failed whichever test
+# came after, one run in four. Here t67 builds, then a second stage is set up the way any test does, and no item may be left
+function t71/start {
+	function train_test:t67/start
+}
+function t71/reset {
+	function train_test:lib/begin
+	function train_test:lib/flat
+}
+function t71/check {
+	execute at @e[tag=tt.origin,limit=1] if entity @e[type=minecraft:item,distance=..64] run function train_test:lib/fail {at:"t71/check#1"}
 }
 #endregion
 

@@ -65,7 +65,13 @@ function generate(root) {
 	// The watch functions of the real portal tests run from here too, every tick, see #pwatch.
 	// lib/ref clones to z up to 100 + 24
 	fs.mkdirSync(path.join(data, "function"), { recursive: true });
+	// GAMETEST_PHASE shifts the pack's tick counter once, at the first tick. The trace slot of a head is its id plus that counter mod 20, and
+	// which test runs when changes with the order the runner picks, so a test that leans on trace timing passes or fails by run order. The
+	// sweep in gametest/sweep.js walks the phases to find those
+	const phase = Number(process.env.GAMETEST_PHASE || 0);
 	fs.writeFileSync(path.join(data, "function", "gt_tick.mcfunction"), [
+		`execute unless score #phased train_test matches 1 run scoreboard players add #gen train.tmp ${phase}`,
+		"scoreboard players set #phased train_test 1",
 		"execute unless loaded 100 64 100 run forceload add 90 90 160 130",
 		"execute unless loaded 3010 64 3004 run forceload add 3008 3004",
 		"execute unless loaded 25000000 64 100 run forceload add 24999990 90 25000060 130",
